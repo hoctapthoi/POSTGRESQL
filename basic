@@ -1,9 +1,27 @@
-PostgresQL instance:
-share memory
-  Share buffers: dữ liệu gốc từ disk dc lưu trữ trên buffers
-  WAL buffers: lưu trữ dữ liệu thay đổi từ dữ liệu gốc
-  CLOG buffers: lưu trũ trạng thái của các transaction (commit, abort, in-Progress)
-Process Memory:
-  Temporary buffers: Xử lý bảng tạm, các hoạt động tạm thời như index, join của bảng tạm
-  Work memory: thực hiện SORT các câu lệnh order by, distinct, join
-  Maintenance Work Memory: thực hiện các lệnh như Vaccum, create index, add FK
+I.PostgresQL architect:
+  1. share memory
+    Share buffers: dữ liệu gốc từ disk dc lưu trữ trên buffers
+    WAL buffers: lưu trữ dữ liệu thay đổi từ dữ liệu gốc
+    CLOG buffers: lưu trũ trạng thái của các transaction (commit, abort, in-Progress)
+  2. Process Memory:
+    Temporary buffers: Xử lý bảng tạm, các hoạt động tạm thời như index, join của bảng tạm
+    Work memory: thực hiện SORT các câu lệnh order by, distinct, join
+    Maintenance Work Memory: thực hiện các lệnh như Vaccum, create index, add FK
+  3. Process:
+    Postmaster: Master process, kill process này, DB sẽ bị stop
+    Checkpoint:
+      ghi dữ liệu từ dirty block (trên memory) xuống disk (dữ liệu thay đổi WAL). 
+      Tạo ra các điểm phôi phục. 
+      xẩy ra khi checkpoint_timeout (default = 5 phút) hoặc khi đạt ngưỡng max_WAL_size 
+    Write: Ghi dữ liệu định kỳ từ memory xuống disk (không phụ thuộc và đóng vai trò giảm tải cho checkpoint) (default bgwriter_delay=200ms)
+    Autovacuum:
+      Xóa các dữ liệu trước thay đổi (dead tuples) 
+      Phân tích, thống kê bảng
+      reset trans-ID (2^32)
+    Statas Collector:
+    Logger
+    Archiver
+    WAL Writer
+    WAL Sender
+    WAL Receiver
+    
