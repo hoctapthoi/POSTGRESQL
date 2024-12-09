@@ -1,0 +1,9 @@
+PostgresQL instance:
+share memory
+  Share buffers: dữ liệu gốc từ disk dc lưu trữ trên buffers
+  WAL buffers: lưu trữ dữ liệu thay đổi từ dữ liệu gốc
+  CLOG buffers: lưu trũ trạng thái của các transaction (commit, abort, in-Progress)
+Process Memory:
+  Temporary buffers: Xử lý bảng tạm, các hoạt động tạm thời như index, join của bảng tạm
+  Work memory: thực hiện SORT các câu lệnh order by, distinct, join
+  Maintenance Work Memory: thực hiện các lệnh như Vaccum, create index, add FK
