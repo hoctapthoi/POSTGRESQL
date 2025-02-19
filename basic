@@ -10,3 +10,17 @@ $ initdb --pgdata=$PGDATA
 ---- start/stop instance ---
 $ pg_ctl start -D $PGDATA  hoặc   pg_ctl -D $PGDATA -l logfile start
 $ pg_ctl stop
+
+============ basic command ==========
+# select current_user;
+# select current_database();
+# select * from pg_database ;
+# select * from pg_tablespace ;
+# select * from pg_settings where ...
+# select * from pg_tables;
+# select pg_postmaster_start_time();
+# select now();
+# select now() + interval '2 hours 40 minutes' as next_time;
+
+list
+
