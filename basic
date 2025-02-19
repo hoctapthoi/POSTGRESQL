@@ -22,5 +22,21 @@ $ pg_ctl stop
 # select now();
 # select now() + interval '2 hours 40 minutes' as next_time;
 
-list
+-- table list---
+postgres=# \dt
+           List of relations
+ Schema |   Name    | Type  |  Owner
+--------+-----------+-------+----------
+ public | employees | table | postgres
+(1 row)
+
+postgres=# \d employees
+                       Table "public.employees"
+   Column    |          Type          | Collation | Nullable | Default
+-------------+------------------------+-----------+----------+---------
+ empid       | integer                |           |          |
+ emp_name    | character varying(200) |           |          |
+ computer_id | character varying(50)  |           |          |
+ salary      | integer                |           |          |
+
 
