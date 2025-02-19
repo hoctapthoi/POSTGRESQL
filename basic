@@ -1,0 +1,12 @@
+---- cài đặt------
+$ rpm -ivh postgresql16-16.0-1PGDG.rhel8.x86_64.rpm  postgresql16-libs-16.0-1PGDG.rhel8.x86_64.rpm  postgresql16-server-16.0-1PGDG.rhel8.x86_64.rpm
+$ mkdir -p /u01/postgresql/16/PGDATA
+$ export PGDATA=/u01/postgresql/16/PGDATA
+$ export PATH=$PATH:/usr/pgsql-16/bin
+
+--- tạo cluster db------
+$ initdb --pgdata=$PGDATA
+
+---- start/stop instance ---
+$ pg_ctl start -D $PGDATA  hoặc   pg_ctl -D $PGDATA -l logfile start
+$ pg_ctl stop
