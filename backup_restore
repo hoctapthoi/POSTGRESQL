@@ -1,0 +1,11 @@
+==== logical backup =====
+--- pg_dump để backup từng DB---
+-- backup db có tên postgres
+$ pg_dump -d postgres > /u01/postgresql/16/backup/postgres_full.sql
+
+-- backup db có tên postgres11 bằng user u1
+$ pg_dump -U u1 -d postgres11 > ./postgres11_full.sql
+
+
+--- pg_dumpall để backup all DB trong cluster ---
+pg_dumpall > ./full.sql
