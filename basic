@@ -30,10 +30,18 @@ postgres=# \c template1
 
 -- table list ---
 postgres=# \dt
+postgres=# select schemaname, tablename, tablespace  from pg_tables;
+
+-- tablespace list ---
+postgres=# \db
+postgres=# select * from pg_tablespace ;
 
 -- describe a table: column, index, attribute ... ---
 postgres=# \d employees
 
 -- clear screen ---
 postgres=# \! clear
+
+========= view =====
+
 
