@@ -3,9 +3,20 @@
 -- backup db có tên postgres
 $ pg_dump -d postgres > /u01/postgresql/16/backup/postgres_full.sql
 
--- backup db có tên postgres11 bằng user u1
+-- backup db có tên postgres11 bằng user u1 dạng clear text
 $ pg_dump -U u1 -d postgres11 > ./postgres11_full.sql
 
+-- backup db có tên postgres11 bằng user u1 dạng non-clear text
+$ pg_dump -U u1 -d postgres11 -Fc > ./postgres11_full.dump
 
 --- pg_dumpall để backup all DB trong cluster ---
 pg_dumpall > ./full.sql
+
+--- vừa backup vừa nén, sử dụng trình nén gzip ---
+$ pg_dump -U u1 -d postgres11     | gzip > ./postgres11_full.gz
+$ pg_dump -U u1 -d postgres11 -Fc | gzip > ./postgres11_full.gz
+
+==== restore =====
+--- logical restore
+$ psql       -d postgres11 < postgres11_full.sql
+$ pg_restore -d postgres11 < postgres11_full.dump
