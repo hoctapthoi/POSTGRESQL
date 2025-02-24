@@ -17,6 +17,10 @@ $ pg_dump -U u1 -d postgres11     | gzip > ./postgres11_full.gz
 $ pg_dump -U u1 -d postgres11 -Fc | gzip > ./postgres11_full.gz
 
 ==== restore =====
---- logical restore
+--- logical restore full DB
 $ psql       -d postgres11 < postgres11_full.sql
 $ pg_restore -d postgres11 < postgres11_full.dump
+
+--- logical restore a table
+$ pg_restore -d postgres11  -t film_actor < postgres11_full.dmp
+
