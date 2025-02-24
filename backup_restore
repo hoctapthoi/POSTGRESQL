@@ -24,3 +24,30 @@ $ pg_restore -d postgres11 < postgres11_full.dump
 --- logical restore a table
 $ pg_restore -d postgres11  -t film_actor < postgres11_full.dmp
 
+=== PITR ====
+--- enable archive ---
+# pagila=# alter system set archive_mode = on ;
+# pagila=# alter system set archive_command = 'cp %p $PGARCHIVE/%f';
+$ pg_ctl restart
+
+postgres=# show wal_level ;
+ wal_level
+-----------
+ replica
+(1 row)
+
+postgres=# show archive_mode ;
+ archive_mode
+--------------
+ on
+(1 row)
+
+postgres=# show archive_command ;
+   archive_command
+---------------------
+ cp %p $PGARCHIVE/%f
+(1 row)
+
+--- test wal backup--
+postgres=# SELECT pg_backup_start('test backup');
+postgres=# SELECT pg_backup_stop();
