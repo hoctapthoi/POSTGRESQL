@@ -1,0 +1,17 @@
+===== find hot table ==========
+SELECT 
+    schemaname,
+    relname AS table_name,
+    seq_scan,
+    idx_scan,
+    n_tup_ins AS inserts,
+    n_tup_upd AS updates,
+    n_tup_del AS deletes,
+    n_live_tup AS live_tuples,
+    n_dead_tup AS dead_tuples
+FROM 
+    pg_stat_user_tables
+ORDER BY 
+    (n_tup_ins + n_tup_upd + n_tup_del) DESC
+LIMIT 10;
+
