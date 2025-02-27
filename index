@@ -1,0 +1,81 @@
+======= create index ======
+--- lock table
+CREATE INDEX index_name1 ON table_name (column1);
+
+--- no lock table 
+CREATE INDEX CONCURRENTLY index_name1 ON table_name (column1);
+
+--- multi index in same table
+psql -d your_database -c "CREATE INDEX CONCURRENTLY index_name1 ON table_name (column1);" &
+psql -d your_database -c "CREATE INDEX CONCURRENTLY index_name2 ON table_name (column2);" &
+psql -d your_database -c "CREATE INDEX CONCURRENTLY index_name3 ON table_name (column3);" &
+
+
+========= check index fragmentation ======
+SELECT
+    current_database() AS database_name,
+    t.relname AS table_name,
+    i.indexrelid::regclass AS index_name,
+    s.leaf_fragmentation
+FROM
+    pg_index AS i
+    JOIN pg_class AS t ON i.indexrelid = t.oid
+    JOIN pg_opclass AS opc ON i.indclass[0] = opc.oid
+    JOIN pg_am ON opc.opcmethod = pg_am.oid
+    CROSS JOIN LATERAL pgstatindex(i.indexrelid) AS s
+WHERE
+    t.relkind = 'i'
+    AND pg_am.amname = 'btree'
+    and s.leaf_fragmentation != 'nan'
+    and s.leaf_fragmentation > 10
+ORDER BY 1,2,4;
+
+======== duplicate indexes ===========
+SELECT 
+    ni.nspname || '.' || ct.relname AS table_name, 
+    ci.relname AS duplicate_index, 
+    pg_get_indexdef(i.indexrelid) AS duplicate_index_definition, 
+    ci2.relname AS encompassing_index, 
+    pg_get_indexdef(i2.indexrelid) AS encompassing_index_definition 
+FROM 
+    pg_index i 
+    JOIN pg_class ct ON i.indrelid = ct.oid 
+    JOIN pg_class ci ON i.indexrelid = ci.oid 
+    JOIN pg_namespace ni ON ci.relnamespace = ni.oid 
+    JOIN pg_index i2 ON i.indrelid = i2.indrelid 
+        AND i.indexrelid != i2.indexrelid 
+        AND (array_to_string(i2.indkey, ' ') || ' ') LIKE (array_to_string(i.indkey, ' ') || ' %') 
+        AND (array_to_string(i2.indcollation, ' ') || ' ') LIKE (array_to_string(i.indcollation, ' ') || ' %') 
+        AND (array_to_string(i2.indclass, ' ') || ' ') LIKE (array_to_string(i.indclass, ' ') || ' %') 
+        AND (array_to_string(i2.indoption, ' ') || ' ') LIKE (array_to_string(i.indoption, ' ') || ' %') 
+    JOIN pg_class ci2 ON i2.indexrelid = ci2.oid 
+WHERE 
+    NOT (i2.indkey::integer[] @> ARRAY[0]);
+
+======= index no used over 60 days ==========
+SELECT 
+    psui.indexrelid::regclass AS index_name, 
+    psui.relid::regclass AS table_name, 
+    psui.idx_scan AS index_scans, 
+    pg_size_pretty(pg_relation_size(psui.indexrelid)) AS index_size 
+FROM 
+    pg_stat_user_indexes AS psui 
+    JOIN pg_stat_user_tables AS psut ON psui.relid = psut.relid 
+WHERE 
+    psui.idx_scan = 0 
+    AND psut.last_vacuum < current_date - interval '60 days' 
+ORDER BY 
+    pg_relation_size(psui.indexrelid) DESC;
+    
+======= rebuild index =======
+--- lock table
+REINDEX INDEX index_name;
+
+---- no lock table
+REINDEX INDEX CONCURRENTLY index_name;
+
+--- multi index in same table
+psql -d your_database -c "REINDEX INDEX CONCURRENTLY index_name1;" &
+psql -d your_database -c "REINDEX INDEX CONCURRENTLY index_name2;" &
+psql -d your_database -c "REINDEX INDEX CONCURRENTLY index_name3;" &
+
