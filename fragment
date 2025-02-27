@@ -1,6 +1,7 @@
 - bảng bị fragment, có thể xử lý bằng 2 cách:
     - rebuild index (REINDEX INDEX index_name), tạo lại index dự theo nguyên trạng của bảng
-    - reordering table (CLUSTER table USING index_name), để sắp xếp lại bảng dự theo 1 index, gây down time trong khi chạy
+    - reordering table (CLUSTER table USING index_name), để sắp xếp lại "tables' page" dựa theo 1 index,
+        gây down time trong khi chạy
 
 ======= create index ======
 --- lock table
