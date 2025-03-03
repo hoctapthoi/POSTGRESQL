@@ -1,3 +1,36 @@
+====--- A. upgrade by pg_upgrade ---====
+---- 1. install newversion
+rpm -Uvh postgresql17*.rpm
+
+---- 2. check compatible verion
+/usr/pgsql-17/bin/pg_upgrade --old-bindir=/usr/pgsql-16/bin --new-bindir=/usr/pgsql-17/bin  --old-datadir=/u01/postgresql/16/PGDATA --new-datadir=/u01/postgresql/17/PGDATA --check
+
+---- 3. tạo dump file: /usr/pgsql-16/bin/pg_dumpall > $PGBACKUP/pg_all.sql
+---- 4. stop db: pg_ctl stop
+---- 5. upgrade
+/usr/pgsql-17/bin/pg_upgrade --old-bindir=/usr/pgsql-16/bin --new-bindir=/usr/pgsql-17/bin  --old-datadir=/u01/postgresql/16/PGDATA --new-datadir=/u01/postgresql/17/PGDATA
+log:
+Upgrade Complete
+----------------
+Optimizer statistics are not transferred by pg_upgrade.
+Once you start the new server, consider running:
+    /usr/pgsql-17/bin/vacuumdb --all --analyze-in-stages
+Running this script will delete the old cluster's data files:
+    ./delete_old_cluster.sh
+
+---- 6. start db and check
+/usr/pgsql-17/bin/vacuumdb --all --analyze-in-stages
+Running this script will del
+/usr/pgsql-17/bin/pg_ctl start -D /u01/postgresql/17/PGDATA/
+
+---- 7. update statistic and cleanup
+/usr/pgsql-17/bin/vacuumdb --all --analyze-in-stages
+./delete_old_cluster.sh
+
+---- 8. update ENV if need
+
+
+====--- B. upgrade by pg_dumpall ---====
 ====== minor version =====
 ---- 1. stop db: pg_ctl stop
 ---- 2. copy thưc mục cài đặt ở cấp hệ điều hành: cp xxx yyy
