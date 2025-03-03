@@ -1,0 +1,29 @@
+====== minor version =====
+---- 1. stop db: pg_ctl stop
+---- 2. copy thưc mục cài đặt ở cấp hệ điều hành: cp xxx yyy
+---- 3. download  postgresql17 ... postgresql17-contrib... postgresql17-libs... postgresql17-server...   và install file bằng rpm command:
+rpm -Uvh postgresql17*.rpm
+
+---- 4. start db: pg_ctl start -D $PGDATA
+
+====== major version ====
+---- 1. tạo dump file: pg_dumpall > $PGBACKUP/pg_all.sql
+---- 2. stop DB
+---- 3. rename thư mục chứa dữ liệu hiện tại (PGDATA)
+---- 4. tạo đường dẫn chứa thư mục mới (PGDATA_NEW)
+---- 5. cài đặt version mới
+rpm -Uvh postgresql17*.rpm
+
+---- 6. initdb
+/usr/pgsql-17/bin/initdb --pgdata=$PGDATA_NEW
+
+---- 7. restore configure file: pg_hba.conf ; postgresql.auto.conf; postgresql.conf
+---- 8. start db
+/usr/pgsql-17/bin/pg_ctl start -D $PGDATA_NEW
+
+---- 9. restore data
+-- remove 2 dòng CREATE ROLE postgres; và ALTER ROLE postgres ở ngay đầu file sql và chạy câu lệnh import
+/usr/pgsql-17/bin/pgsql -U postgres -f $PGBACKUP/pg_all.sql
+
+---- 10. kiểm tra dữ liệu 1 bảng bất kì, nếu OK thì remove version cũ
+rpm --erase postgresql16-server-16.6-1PGDG.rhel8.x86_64 postgresql16-16.6-1PGDG.rhel8.x86_64 postgresql16-contrib-16.6-1PGDG.rhel8.x86_64 postgresql16-libs-16.6-1PGDG.rhel8.x86_64
