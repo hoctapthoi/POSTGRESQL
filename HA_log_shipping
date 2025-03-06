@@ -1,0 +1,16 @@
+---- 1, config ssh password less
+---- 2, pre config on postgresql.conf
+archive_mode = on             
+archive_command = 'rsync -a %p postgres@PostG_STB2:/u01/postgresql/16/ARCHIVE/%f'
+archive_timeout = 60
+
+---- 3, install postgres trên cả 2 server
+---- 4, xóa mọi thứ trong thư mục cài đặt database
+$ cd $PGDATA
+$ rm -rf *
+
+---- 5, start DB trên master
+$ pg_ctl start -D $PGDATA
+
+---- 6, check backup
+# select pg_backup_start ('dbrep');
