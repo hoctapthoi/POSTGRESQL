@@ -1,7 +1,7 @@
 ---- 1, config ssh password less
 ---- 2, pre config on postgresql.conf
 archive_mode = on             
-archive_command = 'rsync -a %p postgres@PostG_STB2:/u01/postgresql/16/ARCHIVE/%f'
+archive_command = 'rsync -a %p postgres@PostG-STB:/u01/postgresql/16/ARCHIVE/%f'
 archive_timeout = 60
 
 ---- 3, install postgres trên cả 2 server
