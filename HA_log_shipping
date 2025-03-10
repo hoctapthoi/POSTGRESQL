@@ -1,16 +1,42 @@
----- 1, config ssh password less
+----- 0, env
+$ export PGDATA=/u01/postgresql/16/data
+$ export PGARCHIVE=/u01/postgresql/16/archive
+---- 1, config ssh passwordless
 ---- 2, pre config on postgresql.conf
 archive_mode = on             
 archive_command = 'rsync -a %p postgres@PostG-STB:/u01/postgresql/16/ARCHIVE/%f'
 archive_timeout = 60
+---- 3, shutdown postgres
+$ pg_ctl stop
 
----- 3, install postgres trên cả 2 server
----- 4, xóa mọi thứ trong thư mục cài đặt database
+---- 4, install and config postgres trên standby server
+$ initdb -D $PGDATA
+$ pg_ctl start -D $PGDATA
+$ pg_ctl stop
 $ cd $PGDATA
 $ rm -rf *
 
 ---- 5, start DB trên master
 $ pg_ctl start -D $PGDATA
 
----- 6, check backup
+---- 6, start backup trên master
 # select pg_backup_start ('dbrep');
+
+---- 7, Copy Data directory for master to standby.
+$ rsync -avz /u01/postgresql/16/data/* postgres@192.168.1.9:/u01/postgresql/16/data/
+
+---- 8, stop backup trên master
+# select pg_backup_stop ();
+
+---- 9,	configure postgresql.conf trên standby:
+  Comment out archive_on, archive_command and archive_timeout parameters in postgresql.conf in standby server
+  Uncomment and configure: Restore_command = 'cp /u01/postgresql/16/archive/%f %p'
+
+---- 10, Create a standby.signal file in data directory: touch $PGDATA/standby.signal
+---- 11, start postgres on standby
+$ pg_ctl start -D $PGDATA
+
+---- 12, audit quá trình replication
+$ cd $PGDATA/log
+$ tail -100f postgresql-Fri.log
+
