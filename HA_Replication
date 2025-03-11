@@ -47,3 +47,17 @@ postgres=# select pg_walfile_name('0/39023B10');
 
 on slave:
   # select * from pg_last_wal_receive_lsn();
+
+
+------- 7 switchover
+ - kiểm tra xem server hiện tại primary hay standby
+select * from pg_is_in_recovery();
+pg_is_in_recovery
+-------------------
+ t
+(1 row)
+-> t : standby
+-> f : primary
+
+ - switch over
+select pg_promote()
