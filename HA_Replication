@@ -1,0 +1,49 @@
+------1. cấu hình file postgresql.conf
+  listen_addresses = '*'
+  wal_level = replica
+  hot_standby = on 
+
+------2. create user for replication and add user to pg_hba.conf
+# Create user repuser with replication encrypted password 'abc';
+$ vi pg_hba.conf
+host    replication     repuser         192.168.157.138/32      trust
+
+----- 3. cleanup data on standby
+$ cd $PGDATA
+$ rm -rf *
+
+---- 4. kéo dữ liệu từ master về standby
+pg_basebackup -h 192.168.157.138 -U repuser -p 5432 -D /u01/postgresql/16/PGDATA -Fp -Xs -P -R -C -S pgstandby
+  -h 192.168.157.138: Địa chỉ IP của máy chủ PostgreSQL mà bạn muốn kết nối.
+  -U repuser: Tên người dùng (username) để kết nối với máy chủ PostgreSQL.
+  -p 5432: Cổng (port) mà PostgreSQL đang lắng nghe (mặc định là 5432).
+  -D /u01/postgresql/16/PGDATA: Thư mục đích (destination directory) nơi bản sao lưu sẽ được lưu trữ.
+  -Fp: Chỉ định định dạng sao lưu là định dạng tệp (plain format).
+  -Xs: Bao gồm các tệp WAL (Write-Ahead Logging) trong bản sao lưu để đảm bảo tính toàn vẹn của dữ liệu.
+  -P: Hiển thị tiến trình sao lưu (progress).
+  -R: Tạo tệp recovery.conf để cấu hình máy chủ sao lưu như một máy chủ dự phòng (standby server).
+  -C: Tạo một kết nối mới với máy chủ PostgreSQL.
+  -S pgstandby: Tạo một slot sao lưu (replication slot) với tên pgstandby.
+
+---- 5. configure audit
+on stand by: cat postgresql.auto.conf
+on primary: select * from  pg_replication_slots ;
+
+---- 6, monitoring replication
+on master:
+  # \x
+  # select * from pg_stat_replication;
+  postgres=# select pg_current_wal_lsn();
+ pg_current_wal_lsn
+--------------------
+ 0/39023B10
+(1 row)
+
+postgres=# select pg_walfile_name('0/39023B10');
+     pg_walfile_name
+--------------------------
+ 000000010000000000000039
+(1 row)
+
+on slave:
+  # select * from pg_last_wal_receive_lsn();
