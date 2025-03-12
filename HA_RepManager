@@ -17,4 +17,33 @@ $ createdb repmgr -O repmgr
 # \l
 # \du+
 
+--- 4, configure pg_hba.conf
+--- 5, create repmgr.conf on primary
+# repmgr.conf
+node_id=1
+node_name= PostG
+conninfo ='host=192.168.157.138 dbname=repmgr user=repmgr connect_timeout=2'
+data_directory = '/u01/postgresql/16/PGDATA'
+failover=automatic
+promote_command='/usr/pgsql-16/bin/repmgr standby promote -f /u01/postgresql/16/repmgr.conf --log-to-file'
+follow_command='/usr/pgsql-16/bin/repmgr standby follow -f /u01/postgresql/16/repmgr.conf --log-to-file --upstream-node-id=%n'
+pg_bindir='/usr/pgsql-16/bin'
+log_file='/u01/postgresql/16/repmgr.log'
+
+--- 6, configure and check primary server
+$ repmgr -f /u01/postgresql/16/repmgr.conf primary register
+$ repmgr -f /u01/postgresql/16/repmgr.conf cluster show
+
+--- 7, create repmgr.conf treen standby
+# repmgr.conf
+node_id=2
+node_name= PostG-STB
+conninfo ='host=192.168.157.139 dbname=repmgr user=repmgr connect_timeout=2'
+data_directory = '/u01/postgresql/16/PGDATA'
+failover=automatic
+promote_command='/usr/pgsql-16/bin/repmgr standby promote -f /u01/postgresql/16/repmgr.conf --log-to-file'
+follow_command='/usr/pgsql-16/bin/repmgr standby follow -f /u01/postgresql/16/repmgr.conf --log-to-file --upstream-node-id=%n'
+pg_bindir='/usr/pgsql-16/bin'
+log_file='/u01/postgresql/16/repmgr.log'
+
 
