@@ -46,4 +46,16 @@ follow_command='/usr/pgsql-16/bin/repmgr standby follow -f /u01/postgresql/16/re
 pg_bindir='/usr/pgsql-16/bin'
 log_file='/u01/postgresql/16/repmgr.log'
 
+--- 8, check and create slave configure on standby
+$ repmgr -h 192.168.157.138 -U repmgr -f /u01/postgresql/16/repmgr.conf standby clone --dry-run
+$ repmgr -h 192.168.157.138 -U repmgr -f /u01/postgresql/16/repmgr.conf standby clone
+$ pg_ctl start -D $PGDATA
 
+--- 9, register and check cluster on standby
+$ repmgr -f /u01/postgresql/16/repmgr.conf standby register
+$ repmgr -f /u01/postgresql/16/repmgr.conf cluster show
+
+--- 10, create log from repmgr deamon
+$ repmgrd -f /u01/postgresql/16/repmgr.conf
+
+---- FAILOVER
