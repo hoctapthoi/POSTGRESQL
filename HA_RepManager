@@ -1,4 +1,4 @@
---- 1, install replmanager
+ --- 1, install replmanager
 curl https://download.postgresql.org/pub/repos/yum/16/redhat/rhel-8-x86_64/repmgr_16-5.5.0-1PGDG.rhel8.x86_64.rpm
 
 --- 2, edit postgresql.conf
@@ -57,7 +57,18 @@ $ pg_ctl start -D $PGDATA
 $ repmgr -f /u01/postgresql/16/repmgr.conf standby register
 $ repmgr -f /u01/postgresql/16/repmgr.conf cluster show
 
---- 10, create log from repmgr deamon
+--- 10, create log from repmgr deamon on both server
 $ repmgrd -f /u01/postgresql/16/repmgr.conf
 
----- FAILOVER
+---- FAILOVER and node rejoin
+--- after primary fail in a moment, standby server will be promote to new primary
+--- after primary online, we need rejoin primary
+--- perform checkpoint on standby server
+$ repmgr -f /u01/postgresql/16/repmgr.conf node service --action=restart --checkpoint
+
+--- rejoin on primary server
+$ repmgr node rejoin -f /u01/postgresql/16/repmgr.conf -d 'host=192.168.157.139 dbname=repmgr user=repmgr' --force-rewind --config-files=postgres.conf,postgres.local.conf --verbose --dry-run
+
+--- perform switch node (option) on current standby server
+$ repmgr -f /u01/postgresql/16/repmgr.conf standby switchover
+
