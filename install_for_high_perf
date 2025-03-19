@@ -1,0 +1,9 @@
+======= 1, architect=======
+binary, archive file: normal disk
+data file : normal/ssd disk
+wal, temp files: ssd disk
+
+======== 2, binary install
+# yum install -y readline-devel zlib-devel gcc make libicu
+# # tar -xvf postgresql-16.6.tar.gz
+
