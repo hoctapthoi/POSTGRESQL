@@ -5,5 +5,34 @@ wal, temp files: ssd disk
 
 ======== 2, binary install
 # yum install -y readline-devel zlib-devel gcc make libicu
-# # tar -xvf postgresql-16.6.tar.gz
 
+# useradd -d /home/postgres/ postgres
+# passwd postgres
+# id postgres
+
+# mkdir -p /u01/app/16/init
+# mkdir -p /u01/app/16/data
+# mkdir -p /u01/app/16/wal_files
+# mkdir -p /u01/app/16/archive_logs
+# mkdir -p /u01/app/16/temp_files
+
+======== 3, build, install PostgreSQL
+# tar -xvf postgresql-16.6.tar.gz
+# cd postgresql-16.6
+# ./configure --prefix=/u01/app/16/init
+
+# make
+# make install
+
+======== 4, build, install contrib module
+# cd contrib
+# make
+# make install
+
+======== 5, check configure
+# cd /u01/app/16/init/bin
+# ./pg_config
+
+========= 6, change owner, export PATH
+# chown postgres:postgres -R /u01
+# export PATH=/u01/app/16/init/bin:$PATH
