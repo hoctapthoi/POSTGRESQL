@@ -15,3 +15,35 @@ ORDER BY
     (n_tup_ins + n_tup_upd + n_tup_del) DESC
 LIMIT 10;
 
+===== pg_buffercache =========
+extension verify buffer cache
+# CREATE EXTENSION pg_buffercache
+# \dx
+
+===== pg_prewarm======
+--- extension for loading table into buffer cache ===
+# CREATE EXTENSION pg_prewarm 
+# \dx
+# SELECT pg_prewarm('t1');
+--- verify t1 in or out of buffercache
+SELECT c.relname, count(*) AS buffers
+FROM pg_buffercache b
+JOIN pg_class c ON b.relfilenode = c.relfilenode
+WHERE c.relname = 't1'  -- Replace 't1' with your table name
+GROUP BY c.relname;
+
+============= configure memory component with ex: 64GB memory, 100 connection, 8 CPU ========
+===== work_mem size ======
+work_mem use for order/distinct/merge join/hash join. if work_mem not enough, query will use tempfile
+25% memory / connection number = 25% x 64GB / 100 = 16MB
+if existing much soft -> increate work_mem size. ex: 24MB, 32MB ...
+configure work_mem for level:
+- session level: # set work_mem = '32MB';
+- query level: # BEGIN;
+                 SET LOCAL work_mem = '64MB';
+                 -- Your specific query here
+                 COMMIT;
+- user/role level: # ALTER ROLE some_user SET work_mem = '16MB';
+set log_temp_files = 0 in postgresql.conf to monitoring temp file
+log message: LOG: temporary file: path "base/pgsql_tmp/...", size <size_in_bytes>
+
