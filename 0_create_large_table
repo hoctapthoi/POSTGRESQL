@@ -1,0 +1,10 @@
+create table public.test500k (
+  emp_id serial primary key, 
+  emp_name text, 
+  empl_no integer); 
+
+insert into public.test500k(emp_name,empl_no) 
+select 
+  gen_random_uuid()::text, 
+  floor(random()*5e5)::int 
+from generate_series(1,5e5,1);
