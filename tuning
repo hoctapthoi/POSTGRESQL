@@ -1,3 +1,15 @@
+===== parallel ======
+Postgres hỗ trợ parallel ở bước gather, select và update với cùng 1 session. 
+bước delete, insert 
+    không được hỗ trợ song song trong cùng 1 session.
+    hỗ trợ song song nhiều session nếu chúng thực hiện trên những primary key khác nhau
+
+===== force parallel =========
+SET parallel_setup_cost = 0; -- giảm điều kiện để parallel
+SET parallel_tuple_cost = 0; -- giảm điều kiện để parallel
+SET max_parallel_workers_per_gather = 2; -- tối đa 2 worker chạy song song khi gather
+SET max_parallel_workers = 8; -- tối đa 8 câu lệnh được chạy đồng thời, câu lệnh thứ 9 phải chờ đến khi worker được giải phóng
+
 ===== find hot table ==========
 SELECT 
     schemaname,
