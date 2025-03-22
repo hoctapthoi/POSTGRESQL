@@ -33,6 +33,11 @@ WHERE c.relname = 't1'  -- Replace 't1' with your table name
 GROUP BY c.relname;
 
 ============= configure memory component with ex: 64GB memory, 100 connection, 8 CPU ========
+===== shared_buffers ======
+data from disk loaded into shared buffer for caching. data in buffer run faster than from disk
+25-40% memory = 25-40% x 64 = 16-25GB
+# alter system set shared_buffers = '16GB'; -> need restart instance;
+
 ===== work_mem size ======
 work_mem use for order/distinct/merge join/hash join. if work_mem not enough, query will use temp file
 25% memory / connection number = 25% x 64GB / 100 = 16MB
@@ -48,3 +53,4 @@ configure work_mem for level:
 set log_temp_files = 0 in postgresql.conf to monitoring temp file
 log message: LOG: temporary file: path "base/pgsql_tmp/...", size <size_in_bytes>
 
+===== maintain_work_mem ========
