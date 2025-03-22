@@ -34,7 +34,7 @@ GROUP BY c.relname;
 
 ============= configure memory component with ex: 64GB memory, 100 connection, 8 CPU ========
 ===== work_mem size ======
-work_mem use for order/distinct/merge join/hash join. if work_mem not enough, query will use tempfile
+work_mem use for order/distinct/merge join/hash join. if work_mem not enough, query will use temp file
 25% memory / connection number = 25% x 64GB / 100 = 16MB
 if existing much soft -> increate work_mem size. ex: 24MB, 32MB ...
 configure work_mem for level:
@@ -44,6 +44,7 @@ configure work_mem for level:
                  -- Your specific query here
                  COMMIT;
 - user/role level: # ALTER ROLE some_user SET work_mem = '16MB';
+- check current work_mem size: show work_mem;
 set log_temp_files = 0 in postgresql.conf to monitoring temp file
 log message: LOG: temporary file: path "base/pgsql_tmp/...", size <size_in_bytes>
 
