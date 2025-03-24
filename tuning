@@ -65,4 +65,14 @@ configure work_mem for level:
 set log_temp_files = 0 in postgresql.conf to monitoring temp file
 log message: LOG: temporary file: path "base/pgsql_tmp/...", size <size_in_bytes>
 
-===== maintain_work_mem ========
+===== maintenance_work_mem ========
+maintenance_work_mem use for create index, add FK, autovacuum
+50MB for each system memory, limit 2GB = 0.05 x 64GB = 3.2GB (> 2GB) = 2GB
+
+===== autovacuum_work_mem ========
+default, auto vacuum use maintenance work mem for doing the job
+system memory / 16 , limit 1GB = 64GB / 16 = 4GB (> 1GB) = 1GB
+
+===== connection =====
+authentication_timeout 
+tcp_keepalive
