@@ -23,3 +23,16 @@ FROM
 ORDER BY
     last_autovacuum DESC
 LIMIT 10;
+
+===== capture autovacuum duration if execution time over threadhold =======
+log_autovacuum_min_duration = 10
+
+===== change threshold autovacuum based on changed row =====
+--- database level: alter system set autovacuum_vacuum_scale_factor=0.15;
+---    table level: alter table t1 set (autovacuum_vacuum_scale_factor=0.15);
+--- audit table level:  SELECT relname AS table_name,
+                               reloptions
+                        FROM pg_class
+                        WHERE relname = 't1';
+
+
