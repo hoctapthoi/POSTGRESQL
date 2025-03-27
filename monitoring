@@ -1,0 +1,9 @@
+==== check active process ==
+SELECT pid, usename, datname, client_addr, state, application_name, backend_start
+FROM pg_stat_activity;
+
+==== check running queries ==
+SELECT pid, query, state, age(clock_timestamp(), query_start) AS duration
+FROM pg_stat_activity
+WHERE state = 'active';
+
