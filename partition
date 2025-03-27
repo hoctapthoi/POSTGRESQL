@@ -1,0 +1,17 @@
+===== create new partition by range ====
+CREATE TABLE test5m_new (
+    emp_id integer NOT NULL,
+    emp_name text,
+    empl_no integer
+) partition by range (emp_id);
+
+===== create partition =======
+CREATE TABLE test5m_new_2000000 PARTITION OF test5m_new
+  FOR VALUES FROM (0) TO (2000000);
+
+CREATE TABLE test5m_new_4000000 PARTITION OF test5m_new
+  FOR VALUES FROM (2000000) TO (4000000);
+  
+CREATE TABLE test5m_new_6000000 PARTITION OF test5m_new
+  FOR VALUES FROM (4000000) TO (6000000);
+
