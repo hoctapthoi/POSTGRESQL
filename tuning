@@ -1,3 +1,8 @@
+====== tools =======
+pgtune
+pg_configurator (pgconfigurator.cybertec.at)
+postgresqltuner.pl
+
 ===== parallel ======
 Postgres hỗ trợ parallel ở bước gather, select và update với cùng 1 session. 
 bước delete, insert 
