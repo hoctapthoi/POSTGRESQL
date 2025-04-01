@@ -1,0 +1,3 @@
+vacuum xóa dead tuples, trả dung lượng cho database instance
+vacuum full copy dữ liệu sang bảng mới và xóa bảng cũ, sau đó đổi tên. quá trình trả lại dung lượng cho OS
+autovacuum = vacuum + analyze
