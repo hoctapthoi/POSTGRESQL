@@ -1,3 +1,16 @@
 vacuum xóa dead tuples, trả dung lượng cho database instance
 vacuum full copy dữ liệu sang bảng mới và xóa bảng cũ, sau đó đổi tên. quá trình trả lại dung lượng cho OS
 autovacuum = vacuum + analyze
+
+===== check live, dead tuples 
+SELECT
+    relname AS table_name,
+    n_live_tup AS live_tuples,
+    n_dead_tup AS dead_tuples
+    last_autovacuum,
+    last_autoanalyze,
+    last_vacuum,
+    last_analyze
+FROM
+    pg_stat_all_tables where relname = 'test_table';
+-- pg_stat_user_tables where relname = 'test_table';
