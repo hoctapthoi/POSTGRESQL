@@ -1,0 +1,39 @@
+========enable PITR, physical backup===============
+---------- enable parameter trong postgresql.conf
+archive_mode = on
+wal_level = replica
+archive_command = 'cp %p /arch/%f'
+
+--------- create backup
+pg_basebackup -D /u02/backup -F tar -z -P -X fetch
+-F tar: Tùy chọn này định dạng bản sao lưu dưới dạng tệp nén .tar.
+-z: Nén bản sao lưu bằng gzip để giảm dung lượng tệp.
+-P: Hiển thị tiến trình của quá trình sao lưu để bạn theo dõi.
+-X fetch: Tùy chọn này dùng để sao chép các tệp WAL (Write-Ahead Log) từ máy chủ PostgreSQL nhằm đảm bảo tính toàn vẹn và khả năng khôi phục dữ liệu.
+
+-------------kiểm tra file được tạo:
+ls /u02/backup
+	16481.tar.gz 	/* file nén tbl space
+	16413.tar.gz	/* file nén tbl space
+	base.tar.gz	  /* file nén dữ liệu
+
+===========PITR
+-----------giải nén file backup
+tar -xzvf /u02/backup/base.tar.gz -C $PGDATA
+
+--------tạo file recovery.signal
+
+--------cấu hình postgresql.conf
+restore_command = 'cp /arch/%f %p'
+recovery_target_time / recovery_target_lsn
+
+--------- kiểm tra tbs mapping:
+cat $PGDATA/tablespace_map
+	16413 /u01
+	16481 /temp
+
+giải nén
+tar -xzvf /u02/backup/16413.tar.gz -C /u01
+tar -xzvf /u02/backup/16481.tar.gz -C /temp
+
+start database
