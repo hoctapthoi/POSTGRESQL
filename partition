@@ -1,17 +1,31 @@
-===== create new partition by range ====
-CREATE TABLE test5m_new (
-    emp_id integer NOT NULL,
-    emp_name text,
-    empl_no integer
-) partition by range (emp_id);
+1. range: for range value
+2. hash: distribute based on hash function 
+3. list: for listed value 
+4. composite: combine 
 
-===== create partition =======
-CREATE TABLE test5m_new_2000000 PARTITION OF test5m_new
-  FOR VALUES FROM (0) TO (2000000);
+------1. range------
+CREATE TABLE sales (id serial PRIMARY KEY, sale_date NOT NULL, amount numeric NOT NULL)
+PARTITION BY RANGE (sale_date);
+CREATE TABLE sale_2023_01 PARTITION OF sales FOR VALUES FROM ('2023-01-01') TO ('2023-02-01');
+CREATE TABLE sale_2023_02 PARTITION OF sales FOR VALUES FROM ('2023-02-01') TO ('2023-03-01');
 
-CREATE TABLE test5m_new_4000000 PARTITION OF test5m_new
-  FOR VALUES FROM (2000000) TO (4000000);
-  
-CREATE TABLE test5m_new_6000000 PARTITION OF test5m_new
-  FOR VALUES FROM (4000000) TO (6000000);
+------2. hash------
+CREATE TABLE users (id serial PRIMARY KEY, username text NOT NULL, email text NOT NULL)
+PARTITION BY HASH (id);
+CREATE TABLE users_p0 PARTITION OF users FOR VALUES WITH (MODULUS 4, REMAINDER 0);
+CREATE TABLE users_p1 PARTITION OF users FOR VALUES WITH (MODULUS 4, REMAINDER 1);
+CREATE TABLE users_p2 PARTITION OF users FOR VALUES WITH (MODULUS 4, REMAINDER 2);
+
+------3. list------
+CREATE TABLE orders (id serial PRIMARY KEY, order_status text NOT NULL, order_date date NOT NULL)
+PARTITION BY LIST (order_status);
+CREATE TABLE orders_pending PARTITION OF orders FOR VALUES IN ('pending');
+CREATE TABLE orders_completed PARTITION OF orders FOR VALUES IN ('completed');
+CREATE TABLE orders_cancelled PARTITION OF orders FOR VALUES IN ('cancelled');
+
+------4. composite------
+CREATE TABLE metrics (id serial PRIMARY KEY, region text NOT NULL, event_date date NOT NULL, 
+	value numeric NOT NULL) PARTITION BY RANGE (event_date) PARTITION BY LIST (region);
+CREATE TABLE metrics_2023_east PARTITION OF metrics FOR VALUES FROM ('2023-01-01') TO (2024-01-01') FOR VALUES IN ('east');
+CREATE TABLE metrics_2023_west PARTITION OF metrics FOR VALUES FROM ('2023-01-01') TO (2024-01-01') FOR VALUES IN ('west');
 
