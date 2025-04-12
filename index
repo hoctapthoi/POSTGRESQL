@@ -9,5 +9,6 @@
   - ex: CREATE INDEX idx_order ON order(low(customer_email)) => tối ưu cho câu lệnh tìm kiếm khi convert sang dạng low key trên trường customer_email
         SELECT * FROM order WHERE low(customer_email)='abc@example.com'
 5. BRIN index (Block Range Index)
-  - tối ưu trên các bảng lưu trữ dữ liệu dạng tuần tự (như time series) và dữ liệu được lưu trên cấp độ block, tiến kiệm không gian nhớ
+  - tối ưu trên các bảng lưu trữ dữ liệu dạng tuần tự (như time series) và dữ liệu được lưu trên cấp độ block, tiến kiệm không gian nhớ và tăng tốc đọc. 
+  - thích hợp tạo cho bảng lớn, có cột dữ liệu dạng time series
   - ex: CREATE INDEX idx_event ON event USING BRIN (log_time) => log_time không yêu cầu unique, nhưng phải tuần tự liên tục
