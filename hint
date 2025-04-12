@@ -3,3 +3,5 @@ cú pháp:  /* + xxxx */
   ex: 
   /* + seqscan(tablename)*/               forces sequance scan for tablename
   /* + IndexScan(tablename indexname)*/   forces index scan for tablename using indexname
+
+có thể hint tạo hint plan cho các câu lệnh từ DB mà ko thay đổi source code thông qua hint_plan.hints
