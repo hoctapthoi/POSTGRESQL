@@ -1,0 +1,5 @@
+cài đặt 'contrib" rpm để sử dụng pg_hint_plan
+cú pháp:  /* + xxxx */
+  ex: 
+  /* + seqscan(tablename)*/               forces sequance scan for tablename
+  /* + IndexScan(tablename indexname)*/   forces index scan for tablename using indexname
