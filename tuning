@@ -3,7 +3,11 @@ pgtune
 pg_configurator (pgconfigurator.cybertec.at)
 postgresqltuner.pl
 
-===== parallel ======
+===== parallel main parameters ======
+parallel_setup_cost: khi cost lớn hơn tham số này, postgresql sẽ thực hiện parallel
+min_parallel_table_scan_size - minimum data size that Postgres will consider for parallel table scan, defaults to 8mb. 
+min_parallel_index_scan_size - minimum data size that Postgres will consider for an index scan, 
+defaults to 512kb (index scans are faster than table scans)
 Postgres hỗ trợ parallel ở bước gather, select và update với cùng 1 session. 
 bước delete, insert 
     không được hỗ trợ song song trong cùng 1 session.
@@ -81,3 +85,4 @@ system memory / 16 , limit 1GB = 64GB / 16 = 4GB (> 1GB) = 1GB
 ===== connection =====
 authentication_timeout 
 tcp_keepalive
+
