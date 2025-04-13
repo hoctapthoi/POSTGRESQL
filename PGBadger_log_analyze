@@ -1,0 +1,21 @@
+==========PGBadger_log_analyze======
+PGBadger read, analyze and visualize log file
+set pararameter:
+	alter system set log_checkpoints = 'on';
+	alter system set log_connections = 'on';
+	alter system set log_disconnections = 'on'; 
+	alter system set log_lockwaits = 'on';
+	alter system set log_temp_files = O ; 
+	alter system set log_autovacuum_min_duration = O; 
+	alter system set log_error_verbosity = 'default' ; 
+  alter system set log_min_duration_statement = 5000 ;
+  alter system set auto_explain.log_min_duration = 5000 ;
+	alter system set auto_explain.log_analyze = true ;
+	alter system set auto_explain.log_verbose = true ;
+	alter system set auto_explain.log_timing = true ;
+	alter system set auto_explain.log_nested_statements = true ;
+	alter system set pg_stat_statements.track = 'all';
+
+
+
+
