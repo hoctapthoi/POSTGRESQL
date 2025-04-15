@@ -7,7 +7,10 @@ PGBadger read, analyze and visualize log file
 	sudo make
 	sudo make install
 
-set pararameter:
+------- add libraries in postgresql.conf -------
+shared_preload_libraries = 'pg_stat_statements,auto_explain,pg_hint_plan'
+
+--------set pararameter:
 	alter system set log_checkpoints = 'on';
 	alter system set log_connections = 'on';
 	alter system set log_disconnections = 'on'; 
@@ -22,7 +25,13 @@ set pararameter:
 	alter system set auto_explain.log_timing = true ;
 	alter system set auto_explain.log_nested_statements = true ;
 	alter system set pg_stat_statements.track = 'all';
+	select pg_reload_conf();
 
+=========== audit ==
+\dx
+       Name        | Version |   Schema   |                              Description
+--------------------+---------+------------+------------------------------------------------------------------------
+ pg_stat_statements | 1.10    | public     | track planning and execution statistics of all SQL statements executed
 
 
 
