@@ -1,0 +1,11 @@
+=========1. install 
+download link: https://github.com/zubkov-andrei/pg_profile
+# create extension dblink;
+# create database pg_profile;
+# \c pg_profile
+# create schema profile;
+# create extension pg_profile schema profile cascade;
+# \dx
+
+========2. 
+
