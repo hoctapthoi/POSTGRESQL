@@ -1,0 +1,36 @@
+Assignment : Database Maintenace
+Turn autovacuum off at the database level.
+
+Generate a workload using pgbench
+
+# replace erp with the db which contains pgbench related tables
+
+pgbench -c 10 -j 2 -t 10000 erp
+
+a.  Use the pgstattuple to find out bloat in the pgbench_accounts table.
+
+b.  Find out the list of unused indexes.
+
+c.  Use the pg_repack command to remove the bloat from all the tables detected in question 2.a (Note: Make a note of the size of table before and after the pg_repack)
+
+d.  Check the bloat again using the pgstattuple.
+
+e.  Rerun the pgbench workload again.
+
+f.  Find out the size of the pgbench_accounts table and its corresponding indexes.
+
+g.  Use the rebuild index to rebuild all the indexes for the pgbench_accounts.
+
+h.  Check the size of the table and index after rebuild.
+
+3.  Create below table in erp database.
+
+create table large_table as select generate_Series (1,100000000) as id, md5(random()::text) as data;
+
+explain analyze select * from large_table order by data;
+
+
+
+a.  Change the database parameters to ensure we log in queies which run over 10 ms in the postgres logfile long with the explain plan. Validate the postgres logfile by rerunning the explain analyze in question 3.
+
+b.  Change correct database parameters to ensure we log in the postgres logfile if any temp files were created due to sorting.  Validate the postgres logfile by rerunning the explain analyze in question 3.
