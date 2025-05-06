@@ -75,4 +75,39 @@ $ repmgr -f /u01/postgresql/16/repmgr.conf standby switchover
 ----- PG Pool II _ load balancing app --------
 download rpm: https://www.pgpool.net/mediawiki/index.php/Downloads
 
+edit configure file: vi /etc/pgpool-II/pgpool.conf
+listen_addresses = '*'
+
+port = 9999
+
+backend_hostname0 = 'post1'
+backend_port0 = 5432
+backend_weight0 = 0
+backend_data_directory0 = '/u01/postgresql/16/data'
+
+backend_hostname1 = 'post2'
+backend_port1 = 5432
+backend_weight1 = 1
+backend_data_directory1 = '/u01/postgresql/16/data'
+
+log_statement = on
+log_per_node_statement = on
+
+pid_file_name = '/var/run/pgpool/pgpool.pid'
+
+r_check_user = 'repmgr'
+sr_check_password = '123'
+health_check_user = 'repmgr'
+health_check_password = '123'
+
+allow_clear_text_frontend_auth = on
+
+load_balance_mode = on
+
+--- test connection ---
+psql -h post1  -U repmgr -p 5432 -d postgres
+psql -h post2  -U repmgr -p 5432 -d postgres
+
+
+
 
