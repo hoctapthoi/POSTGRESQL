@@ -72,3 +72,7 @@ $ repmgr node rejoin -f /u01/postgresql/16/repmgr.conf -d 'host=192.168.157.139 
 --- perform switch node (option) on current standby server
 $ repmgr -f /u01/postgresql/16/repmgr.conf standby switchover
 
+----- PG Pool II _ load balancing app --------
+download rpm: https://www.pgpool.net/mediawiki/index.php/Downloads
+
+
