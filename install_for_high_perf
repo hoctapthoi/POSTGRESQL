@@ -3,7 +3,7 @@ binary, archive file: normal disk
 data file : normal/ssd disk
 wal, temp files: ssd disk
 
-======== 2, binary install
+======== 2, binary install Postgres
 # download link:
 https://www.postgresql.org/ftp/source/v16.10/
 
@@ -34,14 +34,14 @@ sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 yum install -y readline-devel zlib-devel gcc make libicu
 
 useradd -d /home/postgres/ postgres
-passwd postgres
-id postgres
-
 mkdir -p /u01/app/16/init
 mkdir -p /u01/app/16/data
 mkdir -p /u01/app/16/wal_files
 mkdir -p /u01/app/16/archive_logs
 mkdir -p /u01/app/16/temp_files
+chown postgres:postgres -R /u01
+passwd postgres
+id postgres
 
 ======== 3, build, install PostgreSQL
 tar -xvf postgresql-16.6.tar.gz
