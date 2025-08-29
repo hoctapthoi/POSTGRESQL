@@ -64,8 +64,11 @@ cd /u01/app/16/init/bin
 ========= 6, change owner, export PATH
 chown postgres:postgres -R /u01
 export PATH=/u01/app/16/init/bin:$PATH
+export PGDATA=/u01/app/16/data
+initdb
+
 
 ======= 7, change wal_files from default directory to new location
-$ rsync -av /u01/app/16/data/pg_wal/* /u01/app/16/wal_files
-$ mv /u01/app/16/data/pg_wal /u01/app/16/data/pg_wal-backup
-$ sudo ln -s /u01/app/16/wal_files/  /u01/app/16/data/pg_wal
+ rsync -av /u01/app/16/data/pg_wal/* /u01/app/16/wal_files
+ mv /u01/app/16/data/pg_wal /u01/app/16/data/pg_wal-backup
+ sudo ln -s /u01/app/16/wal_files/  /u01/app/16/data/pg_wal
