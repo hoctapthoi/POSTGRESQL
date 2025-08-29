@@ -4,39 +4,65 @@ data file : normal/ssd disk
 wal, temp files: ssd disk
 
 ======== 2, binary install
+# download link:
 https://www.postgresql.org/ftp/source/v16.10/
-# yum install -y readline-devel zlib-devel gcc make libicu
 
-# useradd -d /home/postgres/ postgres
-# passwd postgres
-# id postgres
+# pre-install
+mount /dev/cdrom /mnt
+cd /etc/yum.repos.d/
+mkdir bak
+mv *.repo bak
 
-# mkdir -p /u01/app/16/init
-# mkdir -p /u01/app/16/data
-# mkdir -p /u01/app/16/wal_files
-# mkdir -p /u01/app/16/archive_logs
-# mkdir -p /u01/app/16/temp_files
+sudo tee /etc/yum.repos.d/local.repo > /dev/null <<'EOF'
+[local1]
+enabled=1
+gpgcheck=0
+baseurl=file:///mnt/BaseOS
+
+[local2]
+enabled=1
+gpgcheck=0
+baseurl=file:///mnt/AppStream
+EOF
+
+systemctl stop firewalld
+systemctl disable firewalld
+
+setenforce 0
+sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+
+yum install -y readline-devel zlib-devel gcc make libicu
+
+useradd -d /home/postgres/ postgres
+passwd postgres
+id postgres
+
+mkdir -p /u01/app/16/init
+mkdir -p /u01/app/16/data
+mkdir -p /u01/app/16/wal_files
+mkdir -p /u01/app/16/archive_logs
+mkdir -p /u01/app/16/temp_files
 
 ======== 3, build, install PostgreSQL
-# tar -xvf postgresql-16.6.tar.gz
-# cd postgresql-16.6
-# ./configure --prefix=/u01/app/16/init
+tar -xvf postgresql-16.6.tar.gz
+cd postgresql-16.6
+./configure --prefix=/u01/app/16/init
 
-# make
-# make install
+make
+make install
 
 ======== 4, build, install contrib module
-# cd contrib
-# make
-# make install
+cd contrib
+make
+make install
 
 ======== 5, check configure
-# cd /u01/app/16/init/bin
-# ./pg_config
+cd /u01/app/16/init/bin
+./pg_config
 
 ========= 6, change owner, export PATH
-# chown postgres:postgres -R /u01
-# export PATH=/u01/app/16/init/bin:$PATH
+chown postgres:postgres -R /u01
+export PATH=/u01/app/16/init/bin:$PATH
 
 ======= 7, change wal_files from default directory to new location
 $ rsync -av /u01/app/16/data/pg_wal/* /u01/app/16/wal_files
