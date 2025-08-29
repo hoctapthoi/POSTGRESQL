@@ -4,6 +4,7 @@ data file : normal/ssd disk
 wal, temp files: ssd disk
 
 ======== 2, binary install
+https://www.postgresql.org/ftp/source/v16.10/
 # yum install -y readline-devel zlib-devel gcc make libicu
 
 # useradd -d /home/postgres/ postgres
