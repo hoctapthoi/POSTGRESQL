@@ -4,8 +4,7 @@ data file : normal/ssd disk
 wal, temp files: ssd disk
 
 ======== 2, binary install Postgres
-# download link:
-https://www.postgresql.org/ftp/source/v16.10/
+# download link: https://www.postgresql.org/ftp/source/v16.10/
 
 # pre-install
 mount /dev/cdrom /mnt
@@ -31,15 +30,17 @@ systemctl disable firewalld
 setenforce 0
 sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 
-yum install -y readline-devel zlib-devel gcc make libicu
+yum install -y readline-devel zlib-devel gcc make libicu libicu-devel rsync bash-completion net-tools unzip
 
 useradd -d /home/postgres/ postgres
+usermod -aG wheel postgres
 mkdir -p /u01/app/16/init
 mkdir -p /u01/app/16/data
 mkdir -p /u01/app/16/wal_files
 mkdir -p /u01/app/16/archive_logs
 mkdir -p /u01/app/16/temp_files
 chown postgres:postgres -R /u01
+
 passwd postgres
 id postgres
 
