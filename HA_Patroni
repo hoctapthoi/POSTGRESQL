@@ -1,0 +1,22 @@
+======= 0. stack = PostgreSQL + ETCD + Patroni + HAProxy
+======= 1. install postgresql
+======= 2. install ETCD
+sudo yum install python3-psycopg2 python3-pip PyYAML
+# download ETCD: https://github.com/etcd-io/etcd/releases . ex: etcd-v3.6.4-linux-arm64.tar.gz
+
+tar -xvf etcd-v3.6.4-linux-arm64.tar.gz
+cp etcd-v3.6.4-linux-arm64/etcd* /usr/local/bin/
+chown postgres:postgres /usr/local/bin/etcd*
+su - postgres
+sudo mkdir -p /db/etcd
+sudo chown postgres:postgres -R /db/etcd
+
+sudo vi /etc/etcd.conf ## for node*:
+
+name: post*    
+data-dir: /db/etcd
+initial-advertise-peer-urls: http://post*:2380
+listen-peer-urls: http://0.0.0.0:2380
+listen-client-urls: http://0.0.0.0:2379
+advertise-client-urls: http://post*:2379
+initial-cluster: "post1=http://post1:2380,post2=http://post2:2380,post3=http://post3:2380"
