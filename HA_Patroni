@@ -2,10 +2,10 @@
 ======= 1. install postgresql
 ======= 2. install ETCD
 sudo yum install python3-psycopg2 python3-pip PyYAML
-# download ETCD: https://github.com/etcd-io/etcd/releases . ex: etcd-v3.6.4-linux-arm64.tar.gz
+# download ETCD: https://github.com/etcd-io/etcd/releases . ex: etcd-v3.6.4-linux-amd64.tar.gz
 
-tar -xvf etcd-v3.6.4-linux-arm64.tar.gz
-cp etcd-v3.6.4-linux-arm64/etcd* /usr/local/bin/
+tar -xvf etcd-v3.6.4-linux-amd64.tar.gz
+cp etcd-v3.6.4-linux-amd64/etcd* /usr/local/bin/
 chown postgres:postgres /usr/local/bin/etcd*
 su - postgres
 sudo mkdir -p /db/etcd
@@ -20,3 +20,46 @@ listen-peer-urls: http://0.0.0.0:2380
 listen-client-urls: http://0.0.0.0:2379
 advertise-client-urls: http://post*:2379
 initial-cluster: "post1=http://post1:2380,post2=http://post2:2380,post3=http://post3:2380"
+
+etcd --config-file /etc/etcd.conf &> /u01/app/16/etcd.log &
+
+# test on node2:
+[postgres@post2 ~]$ ETCDCTL_API=3 etcdctl put ha-cookbook-2 "Hello World!"
+{"level":"warn","ts":"2025-08-30T12:06:30.196704-0400","caller":"flags/flag.go:94","msg":"unrecognized environment variable","environment-variable":"ETCDCTL_API=3"}
+OK
+
+[postgres@post3 ~]$ ETCDCTL_API=3 etcdctl put ha-cookbook-3 "Hello World!"
+{"level":"warn","ts":"2025-08-30T12:06:48.021964-0400","caller":"flags/flag.go:94","msg":"unrecognized environment variable","environment-variable":"ETCDCTL_API=3"}
+OK
+
+# test on node1:
+[postgres@post1 ~]$ ETCDCTL_API=3 etcdctl get ha-cookbook-1 ha-cookbook-9
+{"level":"warn","ts":"2025-08-30T12:08:16.261197-0400","caller":"flags/flag.go:94","msg":"unrecognized environment variable","environment-variable":"ETCDCTL_API=3"}
+ha-cookbook-2
+Hello World!
+ha-cookbook-3
+Hello World!
+
+# create etcd service:
+sudo vi /etc/systemd/system/etcd.service
+[Unit]
+Description=etcd key-value store
+Documentation=https://github.com/etcd-io/etcd
+After=network.target
+
+[Service]
+User=postgres
+Type=notify
+ExecStart=/usr/local/bin/etcd --config-file /etc/etcd.conf
+StandardOutput=file:/u01/app/16/etcd.log
+StandardError=file:/u01/app/16/etcd.log
+Restart=always
+RestartSec=10s
+LimitNOFILE=40000
+
+[Install]
+WantedBy=multi-user.target
+
+# reload daemon: systemctl daemon-reload
+# enable, start, stop etcd service
+#
