@@ -30,7 +30,7 @@ systemctl disable firewalld
 setenforce 0
 sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 
-yum install -y readline-devel zlib-devel gcc make libicu libicu-devel rsync bash-completion net-tools unzip
+yum install -y readline-devel zlib-devel gcc make libicu libicu-devel rsync bash-completion net-tools unzip tar
 
 useradd -d /home/postgres/ postgres
 usermod -aG wheel postgres
