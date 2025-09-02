@@ -62,4 +62,38 @@ WantedBy=multi-user.target
 
 # reload daemon: systemctl daemon-reload
 # enable, start, stop etcd service
-#
+# install patroni dependencies
+[postgres@post1 patroni_deps]$ dir
+boto3-1.23.10-py3-none-any.whl
+botocore-1.26.10-py3-none-any.whl
+certifi-2025.4.26-py3-none-any.whl
+cffi-1.15.1-cp36-cp36m-manylinux_2_5_x86_64.manylinux1_x86_64.whl
+charset_normalizer-2.0.12-py3-none-any.whl
+click-8.0.4-py3-none-any.whl
+colorama-0.4.5-py2.py3-none-any.whl
+cryptography-40.0.2-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+dnspython-2.2.1-py3-none-any.whl
+idna-3.10-py3-none-any.whl
+importlib_metadata-4.8.3-py3-none-any.whl
+jmespath-0.10.0-py2.py3-none-any.whl
+kazoo-2.10.0-py2.py3-none-any.whl
+prettytable-2.5.0-py3-none-any.whl
+psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+py_consul-1.5.3-py2.py3-none-any.whl
+pycparser-2.21-py2.py3-none-any.whl
+pysyncobj-0.3.14.tar.gz
+python_dateutil-2.9.0.post0-py2.py3-none-any.whl
+python-etcd-0.4.5.tar.gz
+python_json_logger-2.0.7-py3-none-any.whl
+PyYAML-6.0.1-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+requests-2.27.1-py2.py3-none-any.whl
+s3transfer-0.5.2-py3-none-any.whl
+six-1.17.0-py2.py3-none-any.whl
+typing_extensions-4.1.1-py3-none-any.whl
+urllib3-1.26.20-py2.py3-none-any.whl
+wcwidth-0.2.13-py2.py3-none-any.whl
+ydiff-1.4.2.tar.gz
+zipp-3.6.0-py3-none-any.whl
+
+[postgres@post1 patroni_deps]$ pip3 install --no-index --find-links=. *.whl *.tar.gz
+
