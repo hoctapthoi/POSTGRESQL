@@ -62,38 +62,81 @@ WantedBy=multi-user.target
 
 # reload daemon: systemctl daemon-reload
 # enable, start, stop etcd service
-# install patroni dependencies
-[postgres@post1 patroni_deps]$ dir
-boto3-1.23.10-py3-none-any.whl
-botocore-1.26.10-py3-none-any.whl
-certifi-2025.4.26-py3-none-any.whl
-cffi-1.15.1-cp36-cp36m-manylinux_2_5_x86_64.manylinux1_x86_64.whl
-charset_normalizer-2.0.12-py3-none-any.whl
-click-8.0.4-py3-none-any.whl
-colorama-0.4.5-py2.py3-none-any.whl
-cryptography-40.0.2-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-dnspython-2.2.1-py3-none-any.whl
-idna-3.10-py3-none-any.whl
-importlib_metadata-4.8.3-py3-none-any.whl
-jmespath-0.10.0-py2.py3-none-any.whl
-kazoo-2.10.0-py2.py3-none-any.whl
-prettytable-2.5.0-py3-none-any.whl
-psutil-7.0.0-cp36-abi3-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-py_consul-1.5.3-py2.py3-none-any.whl
-pycparser-2.21-py2.py3-none-any.whl
-pysyncobj-0.3.14.tar.gz
-python_dateutil-2.9.0.post0-py2.py3-none-any.whl
-python-etcd-0.4.5.tar.gz
-python_json_logger-2.0.7-py3-none-any.whl
-PyYAML-6.0.1-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-requests-2.27.1-py2.py3-none-any.whl
-s3transfer-0.5.2-py3-none-any.whl
-six-1.17.0-py2.py3-none-any.whl
-typing_extensions-4.1.1-py3-none-any.whl
-urllib3-1.26.20-py2.py3-none-any.whl
-wcwidth-0.2.13-py2.py3-none-any.whl
-ydiff-1.4.2.tar.gz
-zipp-3.6.0-py3-none-any.whl
+##### install patroni 
+# download python3-cdiff python3-ydiff patroni-4.0.1-1PGDG 
+# from https://download.postgresql.org/pub/repos/yum/common/redhat/rhel-8.9-x86_64/
 
-[postgres@post1 patroni_deps]$ pip3 install --no-index --find-links=. *.whl *.tar.gz
+yum install -y python3-pyyaml  python3-click python3-prettytable python3-psutil python3-urllib3
+rpm -Uvh patroni-4.0.1-1PGDG.rhel8.noarch.rpm python3-cdiff-1.0-1.rhel8.noarch.rpm python3-ydiff-1.2-10.rhel8.noarch.rpm
 
+su - postgres
+sudo chown postgres:postgres /etc/patroni -R
+cd /etc/patroni
+vi stampede.yml
+
+# start postgres and create replication user
+sudo mkrdir -p /var/run/postgresql
+
+# create Pantroni configure file on node1 and create another on each node
+sudo vi /etc/patroni/stampede.yml
+scope: stampede
+name: post1
+
+restapi:
+  listen: post1:8008
+  connect_address: post1:8008
+  
+etcd:
+  host: post1:2379
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+  postgresql:
+    use_pg_rewind: true
+    use_slots: true
+    parameters: 
+      wal_level: logical
+      wal_log_hints: "on"
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  pg_hba:
+    - host replication rep_user 192.168.56.0/24 md5
+    - host all all 192.168.56.0/24 md5
+    - local all all peer
+  users:
+    admin:
+      password: newPAS789
+      options:
+        - createrole
+        - createdb
+  
+postgresql:
+  listen: post1:5432
+  connect_address: post1:5432
+  data_dir: /u01/app/16/data
+  bin_dir: /u01/app/16/init/bin
+  pgpass: /tmp/pgpass0
+  authentication:
+    replication:
+      username: rep_user
+      password: newPAS789
+    superuser:
+      username: postgres
+      password: newPAS789
+  parameters:
+    unix_socket_directories: '/var/run/postgresql'
+    external_pid_file: '/var/run/postgresql/16-main.pid'
+    logging_collector: "on"
+    log_directory: "/u01/app/16"
+    log_filename: "postgresql-16-main.log"
+
+# audit configure file:
+patroni --validate-config /etc/patroni/stampede.yml
+
+# grant configure
+sudo chmod 600 /etc/patroni/stampede.yml
