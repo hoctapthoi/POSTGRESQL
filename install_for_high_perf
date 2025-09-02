@@ -39,7 +39,8 @@ mkdir -p /u01/app/16/data
 mkdir -p /u01/app/16/wal_files
 mkdir -p /u01/app/16/archive_logs
 mkdir -p /u01/app/16/temp_files
-chown postgres:postgres -R /u01
+mkdir -p /var/run/postgresql
+chown postgres:postgres -R /u01 /var/run/postgresql
 
 passwd postgres
 id postgres
