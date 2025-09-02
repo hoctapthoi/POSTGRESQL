@@ -67,6 +67,42 @@ export PATH=/u01/app/16/init/bin:$PATH
 export PGDATA=/u01/app/16/data
 initdb
 
+========= 7, create postgresql service
+sudo vi /etc/systemd/system/postgresql.service
+[Unit]
+Description=PostgreSQL database server
+After=network.target
+
+[Service]
+Type=forking
+User=postgres
+Group=postgres
+
+# Start command
+ExecStart=/u01/app/16/init/bin/pg_ctl start -l /u01/app/16/postgres.log -D /u01/app/16/data
+
+# Stop command
+ExecStop=/u01/app/16/init/bin/pg_ctl stop -D /u01/app/16/data -m fast
+
+# Restart command
+ExecReload=/u01/app/16/init/bin/pg_ctl reload -D /u01/app/16/data
+
+# Environment
+Environment=PGDATA=/u01/app/16/data
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+
 
 ======= 7, change wal_files from default directory to new location
  rsync -av /u01/app/16/data/pg_wal/* /u01/app/16/wal_files
