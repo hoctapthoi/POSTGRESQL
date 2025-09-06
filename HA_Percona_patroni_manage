@@ -1,0 +1,66 @@
+### patroni ###
+# note #
+patroni control postgreSQL
+pause patroni:
+  - PostgreSQL process still running
+  - Replication process still running
+  - if PostgreSQL on patroni leader down, PostgreSQL can't failover to other node
+# patroni leader check #
+[root@node1 ~]# /opt/pgdistro/percona-patroni/bin/patronictl -c /etc/patroni/patroni.yml list
+or
+export PATH=$PATH:/opt/pgdistro/percona-patroni/bin
+alias patronictl='patronictl -c /etc/patroni/patroni.yml'
+[root@node1 ~]# patronictl list
++ Cluster: prod-pg (7546825000673216591) ---+----+-----------+
+| Member | Host       | Role    | State     | TL | Lag in MB |
++--------+------------+---------+-----------+----+-----------+
+| node1  | 10.104.0.1 | Leader  | running   |  1 |           |
+| node2  | 10.104.0.2 | Replica | streaming |  1 |         0 |
+| node3  | 10.104.0.3 | Replica | streaming |  1 |         0 |
++--------+------------+---------+-----------+----+-----------+
+
+# pause/resume patroni #
+patronictl pause => convert patroni to maintenance mode => pause failover process
+patronictl resume => convert patroni back to normal mode
+
+# failover patroni #
+patronictl failover => choose the candiate node for new leader
+
+# check, update, update force the patroni configuration
+patronictl show-config
+patronictl edit-config
+patronictl reload prod-pg --force
+
+### etcd manage ###
+# check member list#
+[postgres@node1 ~]$ ETCDCTL_API=3 etcdctl --endpoint=10.104.0.1:2379,10.104.0.2:2379,10.104.0.3:2379 member list
+296fdbbe670632a6, started, node2, http://10.104.0.2:2380, http://10.104.0.2:2379, false
+4923373642ca36f2, started, node1, http://10.104.0.1:2380, http://10.104.0.1:2379, false
+da001293f7f566f7, started, node3, http://10.104.0.3:2380, http://10.104.0.3:2379, false
+[postgres@node1 ~]$ etcdctl member list -w table
++------------------+---------+-------+------------------------+------------------------+------------+
+|        ID        | STATUS  | NAME  |       PEER ADDRS       |      CLIENT ADDRS      | IS LEARNER |
++------------------+---------+-------+------------------------+------------------------+------------+
+| 296fdbbe670632a6 | started | node2 | http://10.104.0.2:2380 | http://10.104.0.2:2379 |      false |
+| 4923373642ca36f2 | started | node1 | http://10.104.0.1:2380 | http://10.104.0.1:2379 |      false |
+| da001293f7f566f7 | started | node3 | http://10.104.0.3:2380 | http://10.104.0.3:2379 |      false |
++------------------+---------+-------+------------------------+------------------------+------------+
+
+or
+export ETCDCTL_API=3
+export ETCDCTL_ENDPOINTS=10.104.0.1:2379,10.104.0.2:2379,10.104.0.3:2379
+etcdctl member list
+
+# check leader # 
+[postgres@node1 ~]$ etcdctl endpoint status -w table
++-----------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+|    ENDPOINT     |        ID        | VERSION | DB SIZE | IS LEADER | IS LEARNER | RAFT TERM | RAFT INDEX | RAFT APPLIED INDEX | ERRORS |
++-----------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+| 10.104.0.1:2379 | 4923373642ca36f2 |  3.5.21 |  123 kB |      true |      false |         6 |        281 |                281 |        |
+| 10.104.0.2:2379 | 296fdbbe670632a6 |  3.5.21 |  102 kB |     false |      false |         6 |        281 |                281 |        |
+| 10.104.0.3:2379 | da001293f7f566f7 |  3.5.21 |  106 kB |     false |      false |         6 |        281 |                281 |        |
++-----------------+------------------+---------+---------+-----------+------------+-----------+------------+--------------------+--------+
+
+# move leader #
+[postgres@node1 ~]$ etcdctl move-leader 296fdbbe670632a6
+
