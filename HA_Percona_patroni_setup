@@ -1,0 +1,469 @@
+############ patroni stack #########
+### pre install ###
+
+tee -a /etc/hosts > /dev/null << 'EOF'
+10.104.0.1 node1    
+10.104.0.2 node2    
+10.104.0.3 node3    
+EOF
+
+mount /dev/cdrom /mnt
+cd /etc/yum.repos.d/
+mkdir bak
+mv *.repo bak
+
+sudo tee /etc/yum.repos.d/local.repo > /dev/null <<'EOF'
+[local1]
+enabled=1
+gpgcheck=0
+baseurl=file:///mnt/BaseOS
+
+[local2]
+enabled=1
+gpgcheck=0
+baseurl=file:///mnt/AppStream
+EOF
+
+systemctl stop firewalld
+systemctl disable firewalld
+
+setenforce 0
+sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+
+yum install -y readline-devel zlib-devel gcc make libicu libicu-devel rsync bash-completion net-tools unzip tar telnet
+
+# make dir
+mkdir /file
+mkdir -p /opt/pgdistro/
+mkdir -p /u02/pgsql/data
+mkdir -p /u02/pgsql/logs
+useradd -d /home/postgres/ postgres
+usermod -aG wheel postgres
+cd /file
+echo "123" | sudo passwd --stdin postgres
+
+tar -xvf percona-postgresql-16.9-ssl1.1-linux-x86_64.tar.gz
+rm -rf percona-postgresql-16.9-ssl1.1-linux-x86_64.tar.gz
+mv percona-python3/ percona-tcl/ percona-perl/ /opt
+mv * /opt/pgdistro/
+chown postgres:postgres -R /opt /u02
+
+su - postgres
+tee -a /home/postgres/.bash_profile > /dev/null <<'EOF'
+
+export PATH=$PATH:/opt/pgdistro/percona-haproxy/sbin:/opt/pgdistro/percona-patroni/bin:/opt/pgdistro/percona-pgbackrest/bin:/opt/pgdistro/percona-pgbadger:/opt/pgdistro/percona-pgbouncer/bin:/opt/pgdistro/percona-pgpool-II/bin:/opt/pgdistro/percona-postgresql16/bin:/opt/pgdistro/percona-etcd/bin
+export PATH=$PATH:/opt/percona-perl/bin:/opt/percona-tcl/bin:/opt/percona-python3/bin
+
+export ETCDCTL_API=3
+export ETCDCTL_ENDPOINTS=10.104.0.1:2379,10.104.0.2:2379,10.104.0.3:2379
+
+EOF
+export PATH=$PATH:/opt/pgdistro/percona-haproxy/sbin:/opt/pgdistro/percona-patroni/bin:/opt/pgdistro/percona-pgbackrest/bin:/opt/pgdistro/percona-pgbadger:/opt/pgdistro/percona-pgbouncer/bin:/opt/pgdistro/percona-pgpool-II/bin:/opt/pgdistro/percona-postgresql16/bin:/opt/pgdistro/percona-etcd/bin
+export PATH=$PATH:/opt/percona-perl/bin:/opt/percona-tcl/bin:/opt/percona-python3/bin
+export ETCDCTL_API=3
+export ETCDCTL_ENDPOINTS=10.104.0.1:2379,10.104.0.2:2379,10.104.0.3:2379
+
+### setup etcd ###
+## create configure file ##
+# configre node1 #
+su -
+mkdir /etc/etcd
+tee /etc/etcd/etcd.conf.yaml > /dev/null <<'EOF'
+name: 'node1'
+initial-cluster-token: PostgreSQL_HA_Cluster_1
+initial-cluster-state: new
+initial-cluster: node1=http://10.104.0.1:2380,node2=http://10.104.0.2:2380,node3=http://10.104.0.3:2380
+data-dir: /u02/etcd/data
+initial-advertise-peer-urls: http://10.104.0.1:2380 
+listen-peer-urls: http://10.104.0.1:2380
+advertise-client-urls: http://10.104.0.1:2379
+listen-client-urls: http://10.104.0.1:2379
+EOF
+
+# configre node2 #
+su -
+mkdir /etc/etcd
+tee /etc/etcd/etcd.conf.yaml > /dev/null <<'EOF'
+name: 'node2'
+initial-cluster-token: PostgreSQL_HA_Cluster_1
+initial-cluster-state: new
+initial-cluster: node1=http://10.104.0.1:2380,node2=http://10.104.0.2:2380,node3=http://10.104.0.3:2380
+data-dir: /u02/etcd/data
+initial-advertise-peer-urls: http://10.104.0.2:2380
+listen-peer-urls: http://10.104.0.2:2380
+advertise-client-urls: http://10.104.0.2:2379
+listen-client-urls: http://10.104.0.2:2379
+EOF
+
+# configre node3 #
+su -
+mkdir /etc/etcd
+tee /etc/etcd/etcd.conf.yaml > /dev/null <<'EOF'
+name: 'node3'
+initial-cluster-token: PostgreSQL_HA_Cluster_1
+initial-cluster-state: new
+initial-cluster: node1=http://10.104.0.1:2380,node2=http://10.104.0.2:2380,node3=http://10.104.0.3:2380
+data-dir: /u02/etcd/data
+initial-advertise-peer-urls: http://10.104.0.3:2380
+listen-peer-urls: http://10.104.0.3:2380
+advertise-client-urls: http://10.104.0.3:2379
+listen-client-urls: http://10.104.0.3:2379
+EOF
+
+# configure both node #
+mkdir -p /u02/etcd/data
+chown postgres:postgres -R /etc/etcd /u02/etcd
+tee /etc/systemd/system/etcd.service > /dev/null <<'EOF'
+[Unit]
+Description=Percona etcd Service
+After=network.target
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/opt/pgdistro/percona-etcd/bin/etcd --config-file /etc/etcd/etcd.conf.yaml --data-dir /u02/etcd/data
+StandardOutput=file:/u02/etcd/etcd.log
+StandardError=file:/u02/etcd/etcd.log
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+## start service and check ##
+# on both node #
+systemctl daemon-reload
+systemctl enable --now etcd
+systemctl status etcd
+
+su - postgres
+mkdir /home/postgres/archived
+etcdctl member list
+etcdctl endpoint status
+# (option) move leader to node1 (perform on 1 node): etcdctl move-leader <node1_id> 
+
+### setup patroni ###
+## config node1 ##
+mkdir /etc/patroni
+mkdir -p /var/run/postgresql
+tee /etc/patroni/patroni.yml > /dev/null <<'EOF'
+scope: prod-pg
+name: node1
+
+restapi:
+    listen: 0.0.0.0:8008
+    connect_address: 10.104.0.1:8008
+
+etcd3:
+    host: 10.104.0.1:2379
+
+bootstrap:
+  # this section will be written into Etcd:/<namespace>/<scope>/config after initializing new cluster
+  dcs:
+      ttl: 30
+      loop_wait: 10
+      retry_timeout: 10
+      maximum_lag_on_failover: 1048576
+
+      postgresql:
+          use_pg_rewind: true
+          use_slots: true
+          parameters:
+              wal_level: replica
+              hot_standby: "on"
+              wal_keep_segments: 10
+              max_wal_senders: 5
+              max_replication_slots: 10
+              wal_log_hints: "on"
+              logging_collector: 'on'
+              max_wal_size: '10GB'
+              archive_mode: "on"
+              archive_timeout: 600s
+              archive_command: "cp -f %p /home/postgres/archived/%f"
+
+      pg_hba: # Add following lines to pg_hba.conf after running 'initdb'
+      - host replication replicator 127.0.0.1/32 trust
+	  - host replication replicator 10.104.0.0/24 md5
+      - host replication replicator 0.0.0.0/0 md5
+      - host all all 0.0.0.0/0 md5
+      - host all all ::0/0 md5
+      recovery_conf:
+            restore_command: cp /home/postgres/archived/%f %p
+
+  # some desired options for 'initdb'
+  initdb: # Note: It needs to be a list (some options need values, others are switches)
+      - encoding: UTF8
+      - data-checksums
+
+
+postgresql:
+    cluster_name: cluster_1
+    listen: 0.0.0.0:5432
+    connect_address: 10.104.0.1:5432
+    data_dir: /u02/pgsql/data
+    bin_dir: /opt/pgdistro/percona-postgresql16/bin
+    pgpass: /tmp/pgpass0
+    authentication:
+        replication:
+            username: replicator
+            password: replPasswd
+        superuser:
+            username: postgres
+            password: qaz123
+    parameters:
+        unix_socket_directories: "/var/run/postgresql/"
+    create_replica_methods:
+        - basebackup
+    basebackup:
+        checkpoint: 'fast'
+
+    watchdog:
+      mode: required # Allowed values: off, automatic, required
+      device: /dev/watchdog
+      safety_margin: 5
+
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+EOF
+
+chown postgres:postgres -R /var/run/postgresql /etc/patroni
+
+## configure node2 ##
+mkdir /etc/patroni
+mkdir -p /var/run/postgresql
+tee /etc/patroni/patroni.yml > /dev/null <<'EOF'
+scope: prod-pg
+name: node2
+
+restapi:
+    listen: 0.0.0.0:8008
+    connect_address: 10.104.0.2:8008
+
+etcd3:
+    host: 10.104.0.2:2379
+
+bootstrap:
+  # this section will be written into Etcd:/<namespace>/<scope>/config after initializing new cluster
+  dcs:
+      ttl: 30
+      loop_wait: 10
+      retry_timeout: 10
+      maximum_lag_on_failover: 1048576
+
+      postgresql:
+          use_pg_rewind: true
+          use_slots: true
+          parameters:
+              wal_level: replica
+              hot_standby: "on"
+              wal_keep_segments: 10
+              max_wal_senders: 5
+              max_replication_slots: 10
+              wal_log_hints: "on"
+              logging_collector: 'on'
+              max_wal_size: '10GB'
+              archive_mode: "on"
+              archive_timeout: 600s
+              archive_command: "cp -f %p /home/postgres/archived/%f"
+
+      pg_hba: # Add following lines to pg_hba.conf after running 'initdb'
+      - host replication replicator 127.0.0.1/32 trust
+	  - host replication replicator 10.104.0.0/24 md5
+      - host replication replicator 0.0.0.0/0 md5
+      - host all all 0.0.0.0/0 md5
+      - host all all ::0/0 md5
+      recovery_conf:
+            restore_command: cp /home/postgres/archived/%f %p
+
+  # some desired options for 'initdb'
+  initdb: # Note: It needs to be a list (some options need values, others are switches)
+      - encoding: UTF8
+      - data-checksums
+
+
+postgresql:
+    cluster_name: cluster_1
+    listen: 0.0.0.0:5432
+    connect_address: 10.104.0.2:5432
+    data_dir: /u02/pgsql/data
+    bin_dir: /opt/pgdistro/percona-postgresql16/bin
+    pgpass: /tmp/pgpass0
+    authentication:
+        replication:
+            username: replicator
+            password: replPasswd
+        superuser:
+            username: postgres
+            password: qaz123
+    parameters:
+        unix_socket_directories: "/var/run/postgresql/"
+    create_replica_methods:
+        - basebackup
+    basebackup:
+        checkpoint: 'fast'
+
+    watchdog:
+      mode: required # Allowed values: off, automatic, required
+      device: /dev/watchdog
+      safety_margin: 5
+
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+EOF
+
+chown postgres:postgres -R /var/run/postgresql /etc/patroni
+
+## configure node3 ##
+mkdir /etc/patroni
+mkdir -p /var/run/postgresql
+tee /etc/patroni/patroni.yml > /dev/null <<'EOF'
+scope: prod-pg
+name: node3
+
+restapi:
+    listen: 0.0.0.0:8008
+    connect_address: 10.104.0.3:8008
+
+etcd3:
+    host: 10.104.0.3:2379
+
+bootstrap:
+  # this section will be written into Etcd:/<namespace>/<scope>/config after initializing new cluster
+  dcs:
+      ttl: 30
+      loop_wait: 10
+      retry_timeout: 10
+      maximum_lag_on_failover: 1048576
+
+      postgresql:
+          use_pg_rewind: true
+          use_slots: true
+          parameters:
+              wal_level: replica
+              hot_standby: "on"
+              wal_keep_segments: 10
+              max_wal_senders: 5
+              max_replication_slots: 10
+              wal_log_hints: "on"
+              logging_collector: 'on'
+              max_wal_size: '10GB'
+              archive_mode: "on"
+              archive_timeout: 600s
+              archive_command: "cp -f %p /home/postgres/archived/%f"
+
+      pg_hba: # Add following lines to pg_hba.conf after running 'initdb'
+      - host replication replicator 127.0.0.1/32 trust
+	  - host replication replicator 10.104.0.0/24 md5
+      - host replication replicator 0.0.0.0/0 md5
+      - host all all 0.0.0.0/0 md5
+      - host all all ::0/0 md5
+      recovery_conf:
+            restore_command: cp /home/postgres/archived/%f %p
+
+  # some desired options for 'initdb'
+  initdb: # Note: It needs to be a list (some options need values, others are switches)
+      - encoding: UTF8
+      - data-checksums
+
+
+postgresql:
+    cluster_name: cluster_1
+    listen: 0.0.0.0:5432
+    connect_address: 10.104.0.3:5432
+    data_dir: /u02/pgsql/data
+    bin_dir: /opt/pgdistro/percona-postgresql16/bin
+    pgpass: /tmp/pgpass0
+    authentication:
+        replication:
+            username: replicator
+            password: replPasswd
+        superuser:
+            username: postgres
+            password: qaz123
+    parameters:
+        unix_socket_directories: "/var/run/postgresql/"
+    create_replica_methods:
+        - basebackup
+    basebackup:
+        checkpoint: 'fast'
+
+    watchdog:
+      mode: required # Allowed values: off, automatic, required
+      device: /dev/watchdog
+      safety_margin: 5
+
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
+EOF
+
+chown postgres:postgres -R /var/run/postgresql /etc/patroni
+
+## create service on both node ##
+mkdir -p /u02/patroni/data
+mkdir -p /u02/patroni/logs
+tee /etc/systemd/system/percona-patroni.service > /dev/null <<'EOF'
+[Unit]
+Description=Runners to orchestrate a high-availability PostgreSQL
+After=syslog.target network.target
+
+[Service]
+Type=simple
+
+User=postgres
+Group=postgres
+
+ExecStart=/opt/pgdistro/percona-patroni/bin/patroni /etc/patroni/patroni.yml >> /u02/patroni/logs/patroni.log 2>&1
+
+ExecReload=/bin/kill -s HUP $MAINPID
+
+KillMode=process
+TimeoutSec=30
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+EOF
+chown postgres:postgres -R /u02
+systemctl daemon-reload
+
+## start patroni service on node1 ##
+systemctl enable --now percona-patroni
+
+# check status node1 #
+su - postgres
+sudo patronictl -c /etc/patroni/patroni.yml list
+[root@node1 ~]# /opt/pgdistro/percona-patroni/bin/patronictl -c /etc/patroni/patroni.yml list
++ Cluster: prod-pg (7546825000673216591) +----+-----------+
+| Member | Host       | Role   | State   | TL | Lag in MB |
++--------+------------+--------+---------+----+-----------+
+| node1  | 10.104.0.1 | Leader | running |  1 |           |
++--------+------------+--------+---------+----+-----------+
+
+## start patroni service on node2, node3 ##
+systemctl enable --now percona-patroni
+[root@node1 ~]# /opt/pgdistro/percona-patroni/bin/patronictl -c /etc/patroni/patroni.yml list
++ Cluster: prod-pg (7546825000673216591) ---+----+-----------+
+| Member | Host       | Role    | State     | TL | Lag in MB |
++--------+------------+---------+-----------+----+-----------+
+| node1  | 10.104.0.1 | Leader  | running   |  1 |           |
+| node2  | 10.104.0.2 | Replica | streaming |  1 |         0 |
+| node3  | 10.104.0.3 | Replica | streaming |  1 |         0 |
++--------+------------+---------+-----------+----+-----------+
+
+# if state = stopped -> verify the pg_hba.conf file on node1
+# ex: apply register and reload percona-patroni on node 1: systemctl reload percona-patroni
+
+su - postgres
+patronictl -c stop prod-pg
+
+# move leader/failover: patronictl -c xxx failover => then, chosse the new leader candidate
