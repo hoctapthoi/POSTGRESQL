@@ -1,0 +1,125 @@
+### HAProxy + KeepAlived ###
+## architecture ##
+node1: PostgreSQL + ETCD + Patroni + HAProxy + KeepAlived
+node2: PostgreSQL + ETCD + Patroni + HAProxy + KeepAlived
+node3: PostgreSQL + ETCD + Patroni + pgBackRest
+
+## setup HAProxy ##
+binary dir = /
+vi 	
+global
+    maxconn 100                # Maximum number of concurrent connections
+
+defaults
+    log global                 # Use global logging configuration
+    mode tcp                   # TCP mode for PostgreSQL connections
+    retries 2                  # Number of retries before marking a server as failed
+    timeout client 30m         # Maximum time to wait for client data
+    timeout connect 4s         # Maximum time to establish connection to server
+    timeout server 30m         # Maximum time to wait for server response
+    timeout check 5s           # Maximum time to wait for health check response
+
+listen stats                # Statistics monitoring 
+    mode http              # The protocol for web-based stats UI
+    bind *:7000            # Port to listen to on all network interfaces
+    stats enable           # Statistics reporting interface
+    stats uri /stats       # URL path for the stats page
+    stats auth percona:myS3cr3tpass    # Username:password authentication
+
+listen primary
+    bind *:5000                        # Port for write connections
+    option httpchk /primary 
+    http-check expect status 200  
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions  # Server health check parameters
+    server node1 node1:5432 maxconn 100 check port 8008 
+    server node2 node2:5432 maxconn 100 check port 8008  
+
+listen standbys
+    balance roundrobin     # Round-robin load balancing for read connections
+    bind *:5001            # Port for read connections
+    option httpchk /replica 
+    http-check expect status 200  
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions  # Server health check parameters
+    server node1 node1:5432 maxconn 100 check port 8008  
+    server node2 node2:5432 maxconn 100 check port 8008  
+    
+# create haproxy.service
+vi /etc/systemd/system/haproxy.service
+[Unit]
+Description=HAProxy Load Balancer
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/pgdistro/percona-haproxy/sbin/haproxy -f /etc/haproxy/haproxy.cfg -D
+ExecReload=/bin/kill -USR2 $MAINPID
+Restart=on-failure
+PIDFile=/run/haproxy.pid
+
+# Redirect stdout and stderr to log directory
+StandardOutput=append:/u02/haproxy/logs/haproxy.log
+StandardError=append:/u02/haproxy/logs/haproxy_error.log
+
+[Install]
+WantedBy=multi-user.target
+
+systemctl daemon-reload
+systemctl enable --now haproxy
+
+## setup keepavlied ##
+yum install -y keepavlied
+mv /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.bak
+vi /etc/keepalived/keepalived.conf
+# on node1 _ primary
+vrrp_script chk_haproxy {
+    script "killall -0 haproxy"    # Basic check if HAProxy process is running
+    interval 3                      # Check every 2 seconds
+    fall 3                          # The number of failures to mark the node as down
+    rise 2                          # The number of successes to mark the node as up
+    weight -11                        # Reduce priority by 2 on failure
+}
+
+vrrp_instance CLUSTER_1 {           # The name of Patroni cluster
+    state MASTER                    # Initial state for the primary node
+    interface enp0s3                  # Network interface to bind to
+    virtual_router_id 99            # Unique ID for this VRRP instance
+    priority 110                   # The priority for the primary must be the highest
+    advert_int 1                   # Advertisement interval
+    authentication {
+        auth_type PASS
+        auth_pass myS3cr3tpass     # Authentication password
+    }
+    virtual_ipaddress {
+        10.104.0.6/24            # The virtual IP address
+    }
+    track_script {
+        chk_haproxy
+    }
+}
+
+# on node 2 _ standby
+vrrp_script chk_haproxy {
+    script "killall -0 haproxy"    # Basic check if HAProxy process is running
+    interval 2                      # Check every 2 seconds
+    fall 2                          # The number of failures to mark the node as down
+    rise 2                          # The number of successes to mark the node as up
+    weight 2                        # Reduce priority by 2 on failure
+}
+
+vrrp_instance CLUSTER_1 {
+    state BACKUP                    # Initial state for backup node
+    interface enp0s3                  # Network interface to bind to
+    virtual_router_id 99           # Same ID as primary
+    priority 100                   # Lower priority than primary
+    advert_int 1                   # Advertisement interval
+    authentication {
+        auth_type PASS
+        auth_pass myS3cr3tpass     # Same password as primary
+    }
+    virtual_ipaddress {
+        203.0.113.1/24 
+    }
+    track_script {
+        chk_haproxy
+    }
+}
