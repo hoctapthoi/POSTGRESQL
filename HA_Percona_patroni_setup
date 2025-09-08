@@ -1,4 +1,9 @@
 ############ patroni stack #########
+### architecture ###
+node1: PostgreSQL + ETCD + Patroni + HAProxy + KeepAlived
+node2: PostgreSQL + ETCD + Patroni + HAProxy + KeepAlived
+node3: PostgreSQL + ETCD + Patroni + pgBackRest
+
 ### pre install ###
 
 tee -a /etc/hosts > /dev/null << 'EOF'
@@ -400,8 +405,8 @@ postgresql:
       safety_margin: 5
 
 tags:
-    nofailover: false
-    noloadbalance: false
+    nofailover: true    # makesure node3 never become to master if node1 down
+    noloadbalance: true # suitable to reporting 
     clonefrom: false
     nosync: false
 EOF
