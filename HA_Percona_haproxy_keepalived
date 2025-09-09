@@ -4,44 +4,81 @@ node1: PostgreSQL + ETCD + Patroni + HAProxy + KeepAlived
 node2: PostgreSQL + ETCD + Patroni + HAProxy + KeepAlived
 node3: PostgreSQL + ETCD + Patroni + pgBackRest
 
+# write flow: keepavlied_IP #
+# read flow: #
+    application read: 70% node2, 30% node1
+    analytics read: 50% node3, node1 = node2 = 25%
+
+# monitoring #
+url ://10.104.0.6:7000/stats
+u/p: percona/myS3cr3tpass
+
 ## setup HAProxy ##
-binary dir = /
-vi 	
+vi 	/etc/haproxy/haproxy.cfg
 global
-    maxconn 100                # Maximum number of concurrent connections
+    maxconn 100
+    log stdout local0
 
 defaults
-    log global                 # Use global logging configuration
-    mode tcp                   # TCP mode for PostgreSQL connections
-    retries 2                  # Number of retries before marking a server as failed
-    timeout client 30m         # Maximum time to wait for client data
-    timeout connect 4s         # Maximum time to establish connection to server
-    timeout server 30m         # Maximum time to wait for server response
-    timeout check 5s           # Maximum time to wait for health check response
+    log global
+    mode tcp
+    retries 2
+    timeout client 30m
+    timeout connect 4s
+    timeout server 30m
+    timeout check 5s
 
-listen stats                # Statistics monitoring 
-    mode http              # The protocol for web-based stats UI
-    bind *:7000            # Port to listen to on all network interfaces
-    stats enable           # Statistics reporting interface
-    stats uri /stats       # URL path for the stats page
-    stats auth percona:myS3cr3tpass    # Username:password authentication
+# Statistics monitoring interface
+listen stats
+    mode http
+    bind *:7000
+    stats enable
+    stats uri /stats
+    stats auth percona:myS3cr3tpass
 
+# Primary PostgreSQL server (write operations)
 listen primary
-    bind *:5000                        # Port for write connections
-    option httpchk /primary 
-    http-check expect status 200  
-    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions  # Server health check parameters
-    server node1 node1:5432 maxconn 100 check port 8008 
-    server node2 node2:5432 maxconn 100 check port 8008  
+    bind *:5000
+    option httpchk GET /primary
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    # Only node1 and node2 have PostgreSQL+Patroni for primary role
+    server node1 node1:5432 maxconn 100 check port 8008
+    server node2 node2:5432 maxconn 100 check port 8008
 
-listen standbys
-    balance roundrobin     # Round-robin load balancing for read connections
-    bind *:5001            # Port for read connections
-    option httpchk /replica 
-    http-check expect status 200  
-    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions  # Server health check parameters
-    server node1 node1:5432 maxconn 100 check port 8008  
-    server node2 node2:5432 maxconn 100 check port 8008  
+# Application read-replicas (HA setup with automatic failover)
+listen app_reads
+    bind *:5001
+    balance roundrobin
+    option httpchk GET /replica
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    # Prefer node2 for reads (higher weight), fallback to node1
+    server node1 node1:5432 maxconn 100 check port 8008 weight 30
+    server node2 node2:5432 maxconn 100 check port 8008 weight 70
+
+# Analytics/Reporting read-replicas (including dedicated node3)
+listen analytics_reads
+    bind *:5002
+    balance roundrobin
+    option httpchk GET /replica
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    # All nodes available for analytics workloads
+    server node1 node1:5432 maxconn 100 check port 8008 weight 50
+    server node2 node2:5432 maxconn 100 check port 8008 weight 50
+    server node3 node3:5432 maxconn 100 check port 8008 weight 100
+
+# Management/Admin connections to any available node
+listen admin_access
+    bind *:5003
+    balance roundrobin
+    option httpchk GET /
+    http-check expect status 200
+    default-server inter 3s fall 3 rise 2 on-marked-down shutdown-sessions
+    server node1 node1:5432 maxconn 50 check port 8008
+    server node2 node2:5432 maxconn 50 check port 8008
+    server node3 node3:5432 maxconn 50 check port 8008
     
 # create haproxy.service
 vi /etc/systemd/system/haproxy.service
