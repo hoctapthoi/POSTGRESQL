@@ -1,0 +1,200 @@
+#!/bin/bash
+
+# sync_postgres_config.sh - Sync PostgreSQL config from template file
+# syntax: sync_postgres_config.sh template_file target_file
+# ==================== CONFIGURATION ====================
+TEMPLATE_FILE="${1:-postgresql.conf.template}"
+TARGET_FILE="${2:-postgresql.conf}"
+BACKUP_DIR="./backup"
+LOG_FILE="sync_config.log"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# ==================== FUNCTIONS ====================
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+error_exit() {
+    echo -e "${RED}ERROR: $1${NC}" >&2
+    log "ERROR: $1"
+    exit 1
+}
+
+success() {
+    echo -e "${GREEN}$1${NC}"
+    log "SUCCESS: $1"
+}
+
+warning() {
+    echo -e "${YELLOW}WARNING: $1${NC}"
+    log "WARNING: $1"
+}
+
+# Check if files exist
+check_files() {
+    [[ ! -f "$TEMPLATE_FILE" ]] && error_exit "Template file does not exist: $TEMPLATE_FILE"
+    [[ ! -f "$TARGET_FILE" ]] && error_exit "Target file does not exist: $TARGET_FILE"
+}
+
+# Backup original file
+backup_file() {
+    mkdir -p "$BACKUP_DIR"
+    local backup_name="${BACKUP_DIR}/$(basename "$TARGET_FILE").$(date +%Y%m%d_%H%M%S).bak"
+    cp "$TARGET_FILE" "$backup_name" || error_exit "Cannot backup file"
+    success "Backup created: $backup_name"
+}
+
+# Get parameter value from file
+get_param_value() {
+    local file="$1"
+    local param="$2"
+    grep "^[[:space:]]*${param}[[:space:]]*=" "$file" | head -1 | sed "s/^[[:space:]]*${param}[[:space:]]*=[[:space:]]*//" | sed 's/[[:space:]]*$//' | sed 's/#.*//'
+}
+
+# Update or add parameter
+update_or_add_param() {
+    local param="$1"
+    local value="$2"
+    local file="$3"
+    
+    # Check if parameter exists (may be commented out)
+    if grep -q "^[[:space:]]*#*[[:space:]]*${param}[[:space:]]*=" "$file"; then
+        # Parameter exists, update it
+        sed -i.tmp "s|^[[:space:]]*#*[[:space:]]*${param}[[:space:]]*=.*|${param} = ${value}|" "$file"
+        log "UPDATED: $param = $value"
+    else
+        # Parameter doesn't exist, add new
+        echo "${param} = ${value}" >> "$file"
+        log "ADDED: $param = $value"
+    fi
+}
+
+# Process synchronization
+sync_configs() {
+    local count_updated=0
+    local count_added=0
+    local count_unchanged=0
+    
+    log "========== START SYNC =========="
+    
+    # Read each line from template (skip comments and empty lines)
+    while IFS= read -r line; do
+        # Skip comments and empty lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// }" ]] && continue
+        
+        # Extract parameter name and value
+        if [[ "$line" =~ ^[[:space:]]*([a-zA-Z_][a-zA-Z0-9_]*)[[:space:]]*=[[:space:]]*(.*) ]]; then
+            param="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            
+            # Trim value
+            value=$(echo "$value" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sed 's/#.*//')
+            
+            # Get current value from target file
+            current_value=$(get_param_value "$TARGET_FILE" "$param")
+            
+            if [[ -z "$current_value" ]]; then
+                # Not found or commented out
+                update_or_add_param "$param" "$value" "$TARGET_FILE"
+                ((count_added++))
+                echo -e "${GREEN}[+]${NC} $param = $value"
+            elif [[ "$current_value" != "$value" ]]; then
+                # Different value, need update
+                update_or_add_param "$param" "$value" "$TARGET_FILE"
+                ((count_updated++))
+                echo -e "${YELLOW}[~]${NC} $param: '$current_value' → '$value'"
+            else
+                # Same value
+                ((count_unchanged++))
+                echo -e "${GREEN}[=]${NC} $param = $value (unchanged)"
+            fi
+        fi
+    done < "$TEMPLATE_FILE"
+    
+    # Remove temporary file
+    rm -f "${TARGET_FILE}.tmp"
+    
+    log "========== RESULTS =========="
+    log "Added: $count_added"
+    log "Updated: $count_updated"
+    log "Unchanged: $count_unchanged"
+    log "Total: $((count_added + count_updated + count_unchanged))"
+    
+    echo ""
+    echo "================================"
+    echo "Sync Results:"
+    echo "  Added:        $count_added"
+    echo "  Updated:      $count_updated"
+    echo "  Unchanged:    $count_unchanged"
+    echo "================================"
+}
+
+# Validate PostgreSQL config
+validate_config() {
+    if command -v postgres >/dev/null 2>&1; then
+        log "Validating PostgreSQL config..."
+        if postgres -C config_file="$TARGET_FILE" --check 2>/dev/null; then
+            success "Config validation: PASSED"
+            return 0
+        else
+            warning "Config validation: FAILED (but changes applied)"
+            return 1
+        fi
+    else
+        warning "Postgres binary not found, skipping validation"
+    fi
+}
+
+# Show diff
+show_diff() {
+    if [[ -f "${BACKUP_DIR}/$(basename "$TARGET_FILE").$(date +%Y%m%d)*.bak" ]]; then
+        local latest_backup=$(ls -t "${BACKUP_DIR}"/$(basename "$TARGET_FILE").*.bak 2>/dev/null | head -1)
+        if [[ -n "$latest_backup" ]]; then
+            echo ""
+            echo "========== CHANGES =========="
+            diff -u "$latest_backup" "$TARGET_FILE" | grep -E "^[\+\-]" | grep -v "^[\+\-][\+\-][\+\-]"
+            echo "============================="
+        fi
+    fi
+}
+
+# ==================== MAIN ====================
+
+main() {
+    echo "PostgreSQL Config Sync Script"
+    echo "=============================="
+    echo "Template: $TEMPLATE_FILE"
+    echo "Target:   $TARGET_FILE"
+    echo ""
+    
+    # Check files
+    check_files
+    
+    # Backup
+    backup_file
+    
+    # Sync
+    sync_configs
+    
+    # Show diff
+    show_diff
+    
+    # Validate (optional)
+    # validate_config
+    
+    success "Sync completed successfully!"
+    echo ""
+    echo "To apply new configuration:"
+    echo "  sudo systemctl reload postgresql"
+    echo "  or: SELECT pg_reload_conf();"
+}
+
+# Run
+main
