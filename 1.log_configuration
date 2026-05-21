@@ -1,0 +1,50 @@
+Nhóm phải bật
+
+    logging_collector: on | off  
+    → Bật/tắt cơ chế thu thập log ra file.
+
+    log_destination: stderr | csvlog | jsonlog | syslog (có thể nhiều giá trị)
+    → Chọn nơi ghi log.
+
+    log_directory: đường dẫn thư mục
+    → Nơi lưu file log.
+
+    log_filename: mẫu tên file (ví dụ postgresql-%Y-%m-%d.log)
+    → Định dạng tên file log.
+
+🟠 Nhóm cần bật
+
+    log_statement: none | ddl | mod | all  
+    → Log câu lệnh SQL theo mức độ.
+
+    log_min_error_statement: DEBUG1…DEBUG5 | INFO | NOTICE | WARNING | ERROR | FATAL | PANIC  
+    → Log câu lệnh gây lỗi từ mức này trở lên.
+
+    log_min_duration_statement: số ms (hoặc -1 để tắt)
+    → Log câu lệnh chạy lâu hơn ngưỡng.
+
+    log_connections: on | off  
+    → Log khi client kết nối.
+
+    log_disconnections: on | off  
+    → Log khi client ngắt kết nối.
+
+    log_lock_waits: on | off  
+    → Log khi transaction phải chờ lock quá lâu (theo deadlock_timeout).
+
+🟢 Nhóm nên bật
+
+    log_checkpoints: on | off  
+    → Log checkpoint để theo dõi I/O.
+
+    log_autovacuum_min_duration: số ms (hoặc -1 để tắt)
+    → Log autovacuum nếu chạy lâu hơn ngưỡng.
+
+    log_temp_files: số KB (hoặc -1 để tắt)
+    → Log file tạm lớn hơn ngưỡng.
+
+    log_replication_commands: on | off  
+    → Log các lệnh replication.
+
+    log_timezone: tên timezone (ví dụ UTC, Asia/Ho_Chi_Minh)
+    → Đảm bảo timestamp trong log đúng timezone.
