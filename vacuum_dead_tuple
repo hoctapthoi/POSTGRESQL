@@ -1,0 +1,121 @@
+vacuum xóa dead tuples, trả dung lượng cho database instance
+vacuum full copy dữ liệu sang bảng mới và xóa bảng cũ, sau đó đổi tên. quá trình trả lại dung lượng cho OS
+autovacuum = vacuum + analyze
+
+
+############## search table having 10k dead tuples & ratio > 10% ####
+SELECT 
+    schemaname AS schema_name,
+    relname AS table_name,
+    n_dead_tup AS dead_tuples,
+    n_live_tup AS live_tuples,
+    (n_live_tup + n_dead_tup) AS total_tuples,
+    ROUND(
+        ((n_dead_tup::numeric / NULLIF(n_live_tup + n_dead_tup, 0)::numeric) * 100), 2
+    ) AS dead_tuple_ratio_percentage,
+    pg_size_pretty(pg_relation_size(relid)) AS table_size,
+    'VACUUM ANALYZE ' || quote_ident(schemaname) || '.' || quote_ident(relname) || ';' AS vacuum_command
+FROM 
+    pg_stat_user_tables
+WHERE 
+    -- dead tuples > 10,000 
+    n_dead_tup > 10000
+    -- dead tuples ratio > 10%
+    AND (n_dead_tup::numeric / NULLIF(n_live_tup + n_dead_tup, 0)::numeric) >= 0.1
+ORDER BY 
+    n_dead_tup DESC;
+	
+######## set system auto vacuum ###########	
+alter system set autovacuum_vacuum_scale_factor = 0.05  ;
+alter system set autovacuum_vacuum_threshold   = 5000  ;
+select pg_reload_conf();
+
+######## set table auto vaccum #####
+-- ============================================================
+-- BƯỚC 1: Tạo bảng tạm gom dữ liệu từ toàn cluster
+-- ============================================================
+DROP TABLE IF EXISTS tmp_cluster_tables;
+CREATE TEMP TABLE tmp_cluster_tables (
+    database_name TEXT,
+    schema_name   TEXT,
+    table_name    TEXT,
+    live_tuples   BIGINT
+);
+
+DO $$
+DECLARE
+    db        RECORD;
+    sql_query TEXT;
+BEGIN
+    FOR db IN
+        SELECT datname FROM pg_database
+        WHERE datallowconn AND NOT datistemplate
+    LOOP
+        BEGIN
+            sql_query := '
+                SELECT schemaname, relname, n_live_tup
+                FROM pg_stat_user_tables
+                WHERE n_live_tup >= 1000000
+            ';
+
+            INSERT INTO tmp_cluster_tables
+            SELECT db.datname, remote.schemaname, remote.relname, remote.n_live_tup
+            FROM dblink('dbname=' || quote_ident(db.datname), sql_query)
+            AS remote(schemaname TEXT, relname TEXT, n_live_tup BIGINT);
+
+        EXCEPTION
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Không thể kết nối đến database %', db.datname;
+        END;
+    END LOOP;
+END $$;
+
+-- ============================================================
+-- BƯỚC 2: Kiểm tra dữ liệu thu thập được
+-- ============================================================
+SELECT
+    database_name,
+    schema_name,
+    table_name,
+    live_tuples,
+    CASE
+        WHEN live_tuples >= 10000000 THEN 0.01 -- 10M live_tuples
+        WHEN live_tuples >=  1000000 THEN 0.02 --  1M live_tuples
+        ELSE 0.05
+    END AS scale_factor_SHOULD_set,
+    CASE
+        WHEN live_tuples >= 10000000 THEN 1000
+        WHEN live_tuples >=  1000000 THEN 2000
+        ELSE 5000
+    END AS threshold_SHOULD_set
+FROM tmp_cluster_tables
+ORDER BY live_tuples DESC;
+
+-- ============================================================
+-- BƯỚC 3: Sinh script ALTER TABLE — nhóm theo từng database
+-- ============================================================
+SELECT
+    database_name,
+    string_agg(
+        format(
+            E'\c %I\nALTER TABLE %I.%I SET (autovacuum_vacuum_scale_factor = %s, autovacuum_vacuum_threshold = %s);',
+            database_name,
+            schema_name,
+            table_name,
+            CASE
+                WHEN live_tuples >= 10000000 THEN 0.01
+                WHEN live_tuples >=  1000000 THEN 0.02
+                ELSE 0.05
+            END,
+            CASE
+                WHEN live_tuples >= 10000000 THEN 1000
+                WHEN live_tuples >=  1000000 THEN 2000
+                ELSE 5000
+            END
+        ),
+        E'\n'
+        ORDER BY live_tuples DESC
+    ) AS alter_statements
+FROM tmp_cluster_tables
+GROUP BY database_name
+ORDER BY database_name;
