@@ -1,0 +1,451 @@
+# Barman Backup Configuration Guideline
+## PostgreSQL 17 — Hybrid Mode (rsync Base Backup + Streaming WAL)
+
+---
+
+## 📋 Thông Số Cấu Hình
+
+| Tham số | Giá trị |
+|---|---|
+| **Barman user** | `barman` |
+| **Barman password** | Lưu trong `~/.pgpass` (không lưu plaintext trong config) |
+| **Barman server IP** | `192.168.56.126` |
+| **PostgreSQL server IP** | `192.168.56.124` |
+| **PostgreSQL VIP (EFM)** | `192.168.56.120` |
+| **PostgreSQL port** | `5432` |
+| **SSH port** | `22` |
+| **PostgreSQL version** | `17` |
+| **Barman version** | `3.x` |
+| **Backup mode** | Hybrid: rsync (base backup) + Streaming + archive_command (WAL) |
+| **PGDATA** | `/data/pgdata` |
+| **Backup directory** | `/data/backup/post-17` |
+| **Log file** | `/data/backup_log/barman.log` |
+| **Barman config file** | `post-17.conf` |
+| **PostgreSQL instance name** | `post-17` |
+| **OS** | Oracle Linux 9 |
+| **Retention policy** | `RECOVERY WINDOW OF 7 DAYS` |
+
+---
+
+## 📐 Kiến Trúc Backup
+
+```
+PostgreSQL Server (192.168.56.124)          Barman Server (192.168.56.126)
+─────────────────────────────────          ──────────────────────────────
+                                           
+  PostgreSQL 17                            barman
+  PGDATA=/data/pgdata                      
+       │                                   
+       ├── archive_command ─── rsync ────► /data/backup/post-17/wals/incoming/
+       │   (WAL archiving,                 (staging area, barman cron sẽ move)
+       │    fallback)                      
+       │                                   
+       └── streaming replication ────────► pg_receivewal (real-time WAL)
+           (WAL streaming,                 
+            ưu tiên hơn)                   
+                                           
+  rsync qua SSH ◄──────────────────────── barman backup
+  (base backup)                            (full backup theo lịch)
+```
+
+**Tại sao dùng cả 2 nguồn WAL:**
+- `streaming_archiver = on` → WAL real-time, ít gap nhất, được ưu tiên
+- `archiver = on` → WAL qua `archive_command`, chậm hơn nhưng là fallback khi streaming bị gián đoạn
+- Đây là best practice được Barman docs khuyến nghị cho production
+
+---
+
+## 1. Cài Đặt Barman (trên Barman Server — 192.168.56.126)
+
+```bash
+# Cài đặt EPEL và PostgreSQL repo
+sudo dnf install -y epel-release
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+
+# Cài Barman và PostgreSQL client 17
+sudo dnf install -y barman postgresql17
+```
+
+> ⚠️ **Ghi chú (nội suy):** Package `barman` trên Oracle Linux 9 thường đến từ EPEL hoặc PGDG repo. Nếu không tìm thấy, thử: `sudo dnf install -y python3-barman`. Kiểm tra bằng `dnf search barman`.
+
+---
+
+## 2. Cấu Hình SSH Key (cho rsync — Base Backup)
+
+Barman dùng SSH để rsync data từ PostgreSQL server. Cần thiết lập SSH key trust **2 chiều**.
+
+### 2.1 Tạo SSH key trên Barman Server
+
+```bash
+sudo -u barman ssh-keygen -t rsa -b 4096 -N "" -f /var/lib/barman/.ssh/id_rsa
+```
+
+### 2.2 Copy public key sang PostgreSQL Server
+
+```bash
+sudo -u barman ssh-copy-id -p 22 postgres@192.168.56.124
+```
+
+### 2.3 Tạo SSH key trên PostgreSQL Server (chiều ngược lại)
+
+```bash
+# Chạy trên PostgreSQL server (192.168.56.124) với user postgres
+sudo -u postgres ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa
+sudo -u postgres ssh-copy-id barman@192.168.56.126
+```
+
+### 2.4 Kiểm tra SSH 2 chiều
+
+```bash
+# Từ Barman server — phải login được mà không cần password
+sudo -u barman ssh postgres@192.168.56.124 "echo SSH OK"
+
+# Từ PostgreSQL server — phải login được mà không cần password
+sudo -u postgres ssh barman@192.168.56.126 "echo SSH OK"
+```
+
+---
+
+## 3. Cấu Hình `.pgpass` (trên Barman Server)
+
+Thay vì lưu password trong config file, dùng `.pgpass` để bảo mật hơn.
+
+```bash
+# Tạo file .pgpass cho user barman
+sudo -u barman bash -c 'cat > /var/lib/barman/.pgpass << EOF
+# hostname:port:database:username:password
+192.168.56.120:5432:postgres:barman:123
+192.168.56.120:5432:replication:barman:123
+EOF'
+
+# Set permission đúng — PostgreSQL yêu cầu 0600, nếu không sẽ bị ignore
+sudo chmod 0600 /var/lib/barman/.pgpass
+sudo chown barman:barman /var/lib/barman/.pgpass
+```
+
+> ⚠️ **Ghi chú:** `.pgpass` dùng VIP `192.168.56.120` vì đó là host được khai báo trong `conninfo` và `streaming_conninfo`. Nếu khai báo host khác trong config, cần thêm dòng tương ứng vào `.pgpass`.
+
+Kiểm tra `.pgpass` hoạt động:
+
+```bash
+sudo -u barman psql -h 192.168.56.120 -U barman -d postgres -c "SELECT 1"
+# Phải connect được mà không hỏi password
+```
+
+---
+
+## 4. Cấu Hình PostgreSQL (trên PostgreSQL Server — 192.168.56.124)
+
+### 4.1 Chỉnh postgresql.conf
+
+```bash
+sudo -u postgres vi /data/pgdata/postgresql.conf
+```
+
+Thêm / chỉnh các tham số sau:
+
+```ini
+# WAL configuration
+wal_level = replica
+max_wal_senders = 10
+max_replication_slots = 10
+wal_keep_size = 512MB
+
+# Archiving — dùng rsync thay cho barman-wal-archive (không cài barman-cli)
+archive_mode = on
+archive_command = 'rsync -a %p barman@192.168.56.126:/data/backup/post-17/wals/incoming/%f'
+```
+
+**Giải thích `archive_command`:**
+
+| Tham số | Ý nghĩa |
+|---|---|
+| `rsync -a` | Archive mode: giữ nguyên permission, timestamp |
+| `%p` | Full path WAL file (PostgreSQL tự điền) |
+| `%f` | Tên WAL file (PostgreSQL tự điền) |
+| `barman@192.168.56.126` | User và Barman server nhận WAL |
+| `.../wals/incoming/` | Staging area trên Barman — `barman cron` sẽ validate và move vào đúng vị trí |
+
+> ⚠️ **Ghi chú:** Dùng `incoming/` làm staging area là bắt buộc — không đẩy thẳng vào `wals/` vì Barman tự quản lý cấu trúc thư mục đó. Đẩy thẳng có thể gây conflict hoặc Barman bỏ qua file.
+
+### 4.2 Chỉnh pg_hba.conf
+
+```bash
+sudo -u postgres vi /data/pgdata/pg_hba.conf
+```
+
+Thêm các dòng sau:
+
+```
+# Barman — kết nối quản lý
+host    all             barman          192.168.56.126/32       scram-sha-256
+
+# Barman — streaming replication
+host    replication     barman          192.168.56.126/32       scram-sha-256
+```
+
+> ⚠️ **Ghi chú:** Dùng `scram-sha-256` thay cho `md5` — đây là mặc định khuyến nghị từ PostgreSQL 14+. Nếu cluster EFM của bạn đang dùng `md5`, hãy đồng bộ lại.
+
+### 4.3 Tạo role barman trong PostgreSQL
+
+```sql
+sudo -u postgres psql
+
+CREATE ROLE barman WITH LOGIN SUPERUSER REPLICATION PASSWORD '123';
+
+-- Kiểm tra
+\du barman
+```
+
+### 4.4 Test archive_command thủ công
+
+```bash
+# Chạy trên PostgreSQL server với user postgres — phải không hỏi password
+rsync -a /data/pgdata/pg_wal/000000010000000000000001 \
+  barman@192.168.56.126:/data/backup/post-17/wals/incoming/000000010000000000000001
+```
+
+### 4.5 Reload PostgreSQL
+
+```bash
+sudo systemctl reload postgresql-17
+```
+
+---
+
+## 5. Tạo Thư Mục Backup (trên Barman Server — 192.168.56.126)
+
+```bash
+# Tạo các thư mục backup
+sudo mkdir -p /data/backup/post-17/{base,wals,wals/incoming,errors,streaming}
+sudo chown -R barman:barman /data/backup/post-17
+
+# Tạo thư mục log
+sudo mkdir -p /data/backup_log
+sudo chown -R barman:barman /data/backup_log
+
+# Kiểm tra
+ls -la /data/backup/post-17/
+```
+
+---
+
+## 6. Cấu Hình Barman (trên Barman Server — 192.168.56.126)
+
+### 6.1 Chỉnh file barman.conf chính
+
+```bash
+sudo vi /etc/barman.conf
+```
+
+```ini
+[barman]
+barman_user = barman
+configuration_files_directory = /etc/barman.d
+barman_home = /var/lib/barman
+log_file = /data/backup_log/barman.log
+log_level = INFO
+```
+
+### 6.2 Tạo file cấu hình instance
+
+```bash
+sudo vi /etc/barman.d/post-17.conf
+```
+
+```ini
+[post-17]
+description = "PostgreSQL 17 - post-17 (EFM Cluster)"
+
+; ---- Kết nối đến PostgreSQL ----
+; Dùng VIP để tự động follow primary sau failover EFM
+; Password được lấy từ ~/.pgpass — không khai báo password ở đây
+conninfo = host=192.168.56.120 user=barman dbname=postgres port=5432
+streaming_conninfo = host=192.168.56.120 user=barman port=5432
+
+; ---- SSH (dùng cho rsync base backup) ----
+ssh_command = ssh -p 22 postgres@192.168.56.124
+
+; ---- Backup method ----
+backup_method = rsync
+reuse_backup = link
+
+; ---- WAL streaming (real-time, ưu tiên hơn archiving) ----
+streaming_archiver = on
+slot_name = barman_post17
+create_slot = auto
+
+; ---- WAL archiving (fallback qua archive_command + rsync) ----
+archiver = on
+
+; ---- Thư mục lưu backup ----
+basebackups_directory = /data/backup/post-17/base
+wals_directory = /data/backup/post-17/wals
+errors_directory = /data/backup/post-17/errors
+streaming_wals_directory = /data/backup/post-17/streaming
+
+; ---- Retention Policy ----
+retention_policy = RECOVERY WINDOW OF 7 DAYS
+retention_policy_mode = auto
+wal_retention_policy = main
+
+; ---- Compression (tuỳ chọn, bỏ comment nếu muốn bật) ----
+; compression = gzip
+```
+
+> ⚠️ **Ghi chú — `ssh_command` dùng IP thật `192.168.56.124`:**
+> `ssh_command` dùng cho rsync base backup — đây là thao tác **tại một thời điểm cụ thể**, không phải long-lived connection như streaming. Dùng IP thật của primary hiện tại là chấp nhận được. Tuy nhiên nếu failover xảy ra **trong lúc đang chạy** `barman backup`, backup đó sẽ fail và cần chạy lại với IP mới.
+>
+> ⚠️ **Ghi chú — replication slot và EFM:**
+> Replication slot `barman_post17` **không tự migrate** sang primary mới sau failover. Sau mỗi failover cần chạy:
+> ```bash
+> sudo -u barman barman receive-wal --create-slot post-17
+> ```
+
+---
+
+## 7. Tạo Replication Slot
+
+```bash
+sudo -u barman barman receive-wal --create-slot post-17
+```
+
+---
+
+## 8. Kiểm Tra Cấu Hình
+
+```bash
+sudo -u barman barman check post-17
+```
+
+Tất cả các mục phải là `OK`:
+
+| Check item | Mô tả |
+|---|---|
+| `ssh` | SSH từ Barman sang PostgreSQL |
+| `PostgreSQL` | Kết nối psql được |
+| `replication slot` | Slot tồn tại |
+| `streaming` | Streaming WAL hoạt động |
+| `archive_mode` | `archive_mode = on` |
+| `continuous archiving` | `archive_command` hoạt động |
+| `backup maximum age` | Còn trong retention window |
+
+```bash
+# Xem trạng thái chi tiết
+sudo -u barman barman status post-17
+
+# Test WAL archiving
+sudo -u barman barman switch-wal --force --archive post-17
+```
+
+---
+
+## 9. Thực Hiện Backup Lần Đầu
+
+```bash
+sudo -u barman barman backup post-17
+
+# Theo dõi kết quả
+sudo -u barman barman list-backup post-17
+```
+
+---
+
+## 10. Cấu Hình Tự Động — Cron Job
+
+```bash
+sudo -u barman crontab -e
+```
+
+```cron
+# barman cron — bắt buộc, quản lý WAL streaming và maintenance
+*/5 * * * * /usr/bin/barman cron
+
+# Backup full hàng ngày lúc 1:00 AM
+0 1 * * * /usr/bin/barman backup post-17
+```
+
+> ⚠️ **Ghi chú:** `barman cron` phải chạy định kỳ — đây là process xử lý WAL từ `incoming/`, validate, move vào đúng vị trí, và thực hiện retention cleanup. Khuyến nghị 1–5 phút.
+
+---
+
+## 11. Kiểm Tra WAL và Recovery
+
+```bash
+# Kiểm tra WAL continuity của backup mới nhất
+sudo -u barman barman check-backup post-17 latest
+
+# Xem thông tin chi tiết backup
+sudo -u barman barman show-backup post-17 latest
+
+# Test restore sang PostgreSQL server (thận trọng trên production)
+sudo -u barman barman recover post-17 latest /data/pgdata \
+  --remote-ssh-command "ssh postgres@192.168.56.124"
+```
+
+---
+
+## 12. Lệnh Vận Hành Hàng Ngày
+
+| Lệnh | Mô tả |
+|---|---|
+| `barman check post-17` | Kiểm tra toàn bộ cấu hình |
+| `barman status post-17` | Xem trạng thái instance |
+| `barman list-backup post-17` | Liệt kê các backup |
+| `barman backup post-17` | Chạy backup thủ công |
+| `barman show-backup post-17 latest` | Chi tiết backup mới nhất |
+| `barman check-backup post-17 latest` | Kiểm tra WAL continuity |
+| `barman delete post-17 <backup-id>` | Xoá backup cụ thể |
+| `barman switch-wal --force --archive post-17` | Buộc switch WAL (test archive) |
+| `barman receive-wal --create-slot post-17` | Tạo lại replication slot (sau failover) |
+| `barman cron` | Chạy maintenance tasks thủ công |
+
+---
+
+## ⚠️ Lưu Ý Vận Hành Với EFM Cluster
+
+### Sau mỗi lần failover EFM:
+
+1. **`conninfo` và `streaming_conninfo`** — tự động follow VIP `192.168.56.120` ✅
+2. **`ssh_command`** — đang trỏ IP thật `192.168.56.124`. Nếu node này không còn là primary, cần cập nhật lại `post-17.conf` và chạy:
+   ```bash
+   sudo -u barman barman check post-17
+   ```
+3. **Replication slot** — cần tạo lại trên primary mới:
+   ```bash
+   sudo -u barman barman receive-wal --create-slot post-17
+   ```
+
+---
+
+## ⚠️ Các Ghi Chú Tổng Hợp
+
+1. **Firewall** — Đảm bảo các port được mở giữa 2 server:
+   ```bash
+   # Trên PostgreSQL server
+   sudo firewall-cmd --permanent --add-port=5432/tcp
+   sudo firewall-cmd --permanent --add-service=ssh
+   sudo firewall-cmd --reload
+
+   # Trên Barman server
+   sudo firewall-cmd --permanent --add-service=ssh
+   sudo firewall-cmd --reload
+   ```
+
+2. **SELinux** — Oracle Linux 9 mặc định bật SELinux. Nếu gặp lỗi permission khi rsync:
+   ```bash
+   sudo ausearch -m avc -ts recent
+   sudo setsebool -P rsync_client 1
+   ```
+
+3. **PGDATA path** — Guideline này dùng `/data/pgdata` theo thông tin đã cung cấp. Xác nhận lại bằng:
+   ```bash
+   sudo -u postgres psql -c "SHOW data_directory;"
+   ```
+
+4. **`.pgpass` và VIP** — Nếu vì lý do nào đó Barman cần connect trực tiếp vào node IP (không qua VIP), cần bổ sung thêm dòng vào `.pgpass` cho từng node IP.
+
+---
+
+*Tài liệu được tạo cho: Barman 3.x + PostgreSQL 17 + EFM Cluster + Oracle Linux 9*
+*Ngày tạo: 2026-06-13*
