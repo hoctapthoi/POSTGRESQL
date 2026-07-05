@@ -23,6 +23,11 @@ WHERE tc.table_schema = 'public'
   AND tc.table_name = 'xxxx';
 
 #### index #########
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = 'xxxx';
+
 SELECT
     i.relname AS index_name,
     array_to_string(array_agg(a.attname ORDER BY x.n), ', ') AS columns,
@@ -36,6 +41,6 @@ JOIN pg_class t ON t.oid = idx.indrelid
 JOIN pg_am am ON am.oid = i.relam
 JOIN unnest(idx.indkey) WITH ORDINALITY AS x(attnum, n) ON true
 JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = x.attnum
-WHERE t.relname = 'ledger_entries'
+WHERE t.relname = 'xxxx'
 GROUP BY i.relname, idx.indisunique, idx.indisprimary, am.amname, i.oid
 ORDER BY i.relname;
