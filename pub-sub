@@ -1,0 +1,73 @@
+######### create pub-sub replication #########
+#### primary #### 
+CREATE PUBLICATION dwh_be_publication FOR TABLE public.orders;
+
+CREATE USER dwh_be_replica WITH REPLICATION PASSWORD 'xxx';
+GRANT CONNECT ON DATABASE be_uat TO dwh_be_replica;
+GRANT USAGE ON SCHEMA public TO dwh_be_replica;
+GRANT SELECT ON TABLE public.orders TO dwh_be_replica;
+
+#### standby #### 
+CREATE TABLE public.orders (	
+	triggered_at_market_price varchar NULL,
+	recovered_by_rule varchar(255) NULL,
+	tax_config jsonb NULL,
+	auth_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+	created_event_trace_id varchar(32) NULL,
+	trailing_rate_bps int8 DEFAULT 0 NOT NULL
+);
+
+CREATE SUBSCRIPTION dwh_be_subscription
+    CONNECTION 'host=10.69.ip.ip port=5444 dbname=be_uat user=dwh_be_replica password=xxx target_session_attrs=read-write'
+    PUBLICATION dwh_be_publication
+    WITH (
+        failover      = true,
+        slot_name     = 'sub_dwh_be',
+        create_slot   = true,
+        copy_data     = true,  
+        streaming     = parallel,
+        synchronous_commit = 'off'
+    );
+
+######### add more tables #########
+-- 1. Cấp quyền SELECT trên bảng mới cho user replication (nếu chưa cấp)
+GRANT SELECT ON TABLE ten_bang_moi TO cdc_repl_user;
+
+-- 2. Thêm bảng mới vào Publication
+ALTER PUBLICATION ${PUB_NAME} ADD TABLE ten_bang_moi;
+
+-- 3. Create table trên sub
+CREATE TABLE (...);
+
+-- 4 refresh sub để download data
+ALTER SUBSCRIPTION ${SUB_NAME} REFRESH PUBLICATION;
+
+######### troubleshoot and operation #########
+#### check pub #### 
+coin_wallet_prod=# SELECT pubname,
+       puballtables,       pubinsert,       pubupdate,       pubdelete,       pubtruncate
+FROM pg_publication;
+     pubname         | puballtables | pubinsert | pubupdate | pubdelete | pubtruncate
+-----------------------+------------------+--------------+----------------+---------------+-------------
+ dwh_be_publication | f                     | t                 | t                   | t                   | t
+
+coin_wallet_prod=#   SELECT subid, subname, worker_type, pid, received_lsn, last_msg_receipt_time
+FROM pg_stat_subscription;
+subid |     subname     | worker_type | pid | received_lsn | last_msg_receipt_time
+-------+-----------------+-------------+-----+--------------+-----------------------
+ 16551 | dwh_be_subscription |apply      |19275 |2F7/DE08EA00 |2026-07-10 14:28:12.403 +0700
+
+
+#### check sub ####
+edb=# SELECT subid, subname, worker_type, pid, received_lsn, last_msg_receipt_time
+FROM pg_stat_subscription;
+ subid   |     subname         | worker_type |   pid        | received_lsn     |      last_msg_receipt_time
+----------+-----------------------+------------------+------------+---------------------+----------------------------------
+ 16934 | dwh_be_subscription | apply              | 3945998 | 7C/B3E7BD28  | 23-JUN-26 14:25:19.206775 +
+
+#### re-create slot nếu bị mất #### 
+SELECT pg_create_logical_replication_slot('sub_dwh_be', 'pgoutput');
+
+#### reset replication worker trên SUB ####
+ALTER SUBSCRIPTION dwh_be_subscription DISABLE;
+ALTER SUBSCRIPTION dwh_be_subscription ENABLE;
