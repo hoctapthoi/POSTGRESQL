@@ -14,7 +14,7 @@ SELECT
         ((n_dead_tup::numeric / NULLIF(n_live_tup + n_dead_tup, 0)::numeric) * 100), 2
     ) AS dead_tuple_ratio_percentage,
     pg_size_pretty(pg_relation_size(relid)) AS table_size,
-    'VACUUM ANALYZE ' || quote_ident(schemaname) || '.' || quote_ident(relname) || ';' AS vacuum_command
+    'VACUUM (ANALYZE, VERBOSE) ' || quote_ident(schemaname) || '.' || quote_ident(relname) || ';' AS vacuum_command
 FROM 
     pg_stat_user_tables
 WHERE 
