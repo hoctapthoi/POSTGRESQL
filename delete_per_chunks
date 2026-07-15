@@ -1,0 +1,36 @@
+## check ##
+SELECT count(*) FROM versions
+WHERE created_at < now() - interval '15 days';
+
+## DELETE ##
+DO $$
+DECLARE
+    v_rowcount BIGINT;
+    v_total    BIGINT := 0;
+BEGIN
+    LOOP
+        DELETE FROM versions
+        WHERE id IN (
+            SELECT id
+            FROM versions
+            WHERE created_at < now() - interval '15 days'
+            LIMIT 500
+        );
+
+        GET DIAGNOSTICS v_rowcount = ROW_COUNT;
+        v_total := v_total + v_rowcount;
+        RAISE NOTICE 'Deleted % rows in this batch, % rows in total', v_rowcount, v_total;
+
+        EXIT WHEN v_rowcount = 0;
+        COMMIT;
+    END LOOP;
+
+    RAISE NOTICE 'Done. Total rows deleted: %', v_total;
+END $$;
+
+## VACUUM ##
+SET maintenance_work_mem = '4GB'; # < 25% RAM
+SET vacuum_cost_delay = 0; 
+SET max_parallel_maintenance_workers = 4; # ~ free CPU Core
+VACUUM (ANALYZE, VERBOSE) versions;  
+  
