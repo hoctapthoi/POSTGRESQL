@@ -1,0 +1,29 @@
+-- create stored table on edb database -----
+  CREATE TABLE ddl_audit_log (
+    id SERIAL PRIMARY KEY,
+    event_time TIMESTAMP DEFAULT now(),
+    username TEXT DEFAULT current_user,
+    client_ip INET DEFAULT inet_client_addr(),
+    command_tag TEXT,
+    query_text TEXT
+);
+
+-- create function ---------
+CREATE OR REPLACE FUNCTION log_ddl_event()
+RETURNS event_trigger AS $$
+BEGIN
+    INSERT INTO ddl_audit_log (
+        command_tag, 
+        query_text
+    )
+    VALUES (
+        TG_TAG, 
+        current_query() -- Lấy toàn bộ câu lệnh SQL gốc người dùng vừa chạy
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+-- create event trigger -----
+CREATE EVENT TRIGGER trg_log_ddl 
+ON ddl_command_start 
+EXECUTE FUNCTION log_ddl_event();
