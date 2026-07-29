@@ -27,3 +27,33 @@ $$ LANGUAGE plpgsql;
 CREATE EVENT TRIGGER trg_log_ddl 
 ON ddl_command_start 
 EXECUTE FUNCTION log_ddl_event();
+
+
+############ CREATE foreign table if need ############
+-- 0. Create extension
+CREATE EXTENSION IF NOT EXISTS postgres_fdw;
+
+-- 1. Tạo Server trỏ về chính máy cục bộ (localhost)
+CREATE SERVER local_be_uat
+FOREIGN DATA WRAPPER postgres_fdw
+OPTIONS (
+    host 'localhost',  -- Hoặc '127.0.0.1'
+    port '5444',       -- Port của Postgres Cluster hiện tại
+    dbname 'be_uat' -- Tên Database thứ 2 bạn muốn kết nối tới
+);
+
+-- 2. Tạo User Mapping
+CREATE USER MAPPING FOR postgres
+SERVER local_be_uat
+OPTIONS (
+    user 'postgres'    -- User có quyền truy vấn bên database_b
+);
+
+-- 3. Tạo Foreign Table hoặc Import Schema như bình thường
+IMPORT FOREIGN SCHEMA public 
+LIMIT TO (ddl_audit_log)
+FROM SERVER local_be_uat 
+INTO public;
+
+-- 4. Rename table if need
+ALTER TABLE ddl_audit_log RENAME TO xxx_ddl_audit_log
