@@ -1,0 +1,10 @@
+SELECT n.nspname AS schema,
+       c.relname AS object_name,
+       c.relkind,
+       a.privilege_type,
+       a.grantee::regrole AS grantee
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL aclexplode(c.relacl) a
+WHERE a.grantee = (SELECT oid FROM pg_roles WHERE rolname = 'dwh')
+ORDER BY schema, object_name;
